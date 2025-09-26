@@ -1839,11 +1839,11 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
 
         Example
             >>> row = {'first': 'John', 'middle': 'Joe', 'last': 'Smith'}
-            >>> group_by_key = DeepDiff._get_key_for_group_by(row, 'first', 't1')
+            >>> DeepDiff._get_key_for_group_by(row, 'first', 't1')
             'John'
             >>> nested_row = {'id': 123, 'demographics': {'names': {'first': 'John', 'middle': 'Joe', 'last': 'Smith'}}}
-            >>> group_by_key = DeepDiff._get_key_for_group_by(nested_row,
-                                                              lambda x: x['demographics']['names']['first'], 't1')
+            >>> group_by = lambda x: x['demographics']['names']['first']
+            >>> DeepDiff._get_key_for_group_by(nested_row, group_by, 't1')
             'John'
 
         Args:
