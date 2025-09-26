@@ -943,7 +943,7 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         t2_from_index=None, t2_to_index=None,
     ):
         for (i, j), (x, y) in self._get_matching_pairs(
-            level, 
+            level,
             t1_from_index=t1_from_index, t1_to_index=t1_to_index,
             t2_from_index=t2_from_index, t2_to_index=t2_to_index
         ):
@@ -1939,13 +1939,13 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         Whether a value was changed or they were added or removed.
 
         Example
+            >>> from pprint import pprint
             >>> t1 = {1: 1, 2: 2, 3: [3], 4: 4}
             >>> t2 = {1: 1, 2: 4, 3: [3, 4], 5: 5, 6: 6}
             >>> ddiff = DeepDiff(t1, t2)
-            >>> ddiff
             >>> pprint(ddiff, indent=4)
-            {   'dictionary_item_added': [root[5], root[6]],
-                'dictionary_item_removed': [root[4]],
+            {   'dictionary_item_added': ['root[5]', 'root[6]'],
+                'dictionary_item_removed': ['root[4]'],
                 'iterable_item_added': {'root[3][1]': 4},
                 'values_changed': {'root[2]': {'new_value': 4, 'old_value': 2}}}
             >>> ddiff.affected_paths
@@ -1971,13 +1971,13 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         Whether a value was changed or they were added or removed.
 
         Example
+            >>> from pprint import pprint
             >>> t1 = {1: 1, 2: 2, 3: [3], 4: 4}
             >>> t2 = {1: 1, 2: 4, 3: [3, 4], 5: 5, 6: 6}
             >>> ddiff = DeepDiff(t1, t2)
-            >>> ddiff
             >>> pprint(ddiff, indent=4)
-            {   'dictionary_item_added': [root[5], root[6]],
-                'dictionary_item_removed': [root[4]],
+            {   'dictionary_item_added': ['root[5]', 'root[6]'],
+                'dictionary_item_removed': ['root[4]'],
                 'iterable_item_added': {'root[3][1]': 4},
                 'values_changed': {'root[2]': {'new_value': 4, 'old_value': 2}}}
             >>> ddiff.affected_paths
