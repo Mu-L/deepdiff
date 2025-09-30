@@ -7,8 +7,6 @@ name = "deepdiff"
 version = "8.5.0"
 dependencies = [
   "orderly-set>=5.4.1,<6",
-  "numpy~=2.2.0; python_version >= '3.10'",
-  "numpy~=2.0; python_version < '3.10'",
 ]
 requires-python = ">=3.9"
 authors = [
@@ -48,6 +46,8 @@ dev = [
   "bump2version~=1.0.0",
   "jsonpickle~=4.0.0",
   "ipdb~=0.13.0",
+  "numpy~=2.2.0; python_version >= '3.10'",
+  "numpy~=2.0; python_version < '3.10'",
   "python-dateutil~=2.9.0",
   "orjson~=3.10.0",
   "tomli~=2.2.0",
@@ -73,10 +73,6 @@ test = [
   "pytest-benchmark~=5.1.0",
   "pytest-cov~=6.0.0",
   "python-dotenv~=1.0.0",
-  "pydantic~=2.10.0",
-  "pytz~=2025.2",
-  "click~=8.1.0",
-  "uuid6~=2025.0.1",
 ]
 optimize = [
   "orjson",
