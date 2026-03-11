@@ -24,6 +24,7 @@ from deepdiff.helper import (
     strings,
     get_type,
     TEXT_VIEW,
+    TREE_VIEW,
     np_float32,
     np_float64,
     np_int32,
@@ -171,7 +172,7 @@ class SerializationMixin:
         except ImportError:  # pragma: no cover. Json pickle is getting deprecated.
             logger.error('jsonpickle library needs to be installed in order to run from_json_pickle')  # pragma: no cover. Json pickle is getting deprecated.
 
-    def to_json(self, default_mapping: Optional[dict]=None, force_use_builtin_json=False, **kwargs):
+    def to_json(self, default_mapping: Optional[dict]=None, force_use_builtin_json=False, verbose_level: Optional[int]=None, **kwargs):
         """
         Dump json of the text view.
         **Parameters**
@@ -186,6 +187,8 @@ class SerializationMixin:
             When True, we use Python's builtin Json library for serialization,
             even if Orjson is installed.
 
+        verbose_level: int, default=None
+            Override the verbose_level for the serialized output. See to_dict() for details.
 
         kwargs: Any other kwargs you pass will be passed on to Python's json.dumps()
 
@@ -208,7 +211,7 @@ class SerializationMixin:
             >>> ddiff.to_json(default_mapping=default_mapping)
             '{"type_changes": {"root": {"old_type": "A", "new_type": "B", "old_value": "obj A", "new_value": "obj B"}}}'
         """
-        dic = self.to_dict(view_override=TEXT_VIEW)
+        dic = self.to_dict(verbose_level=verbose_level)
         return json_dumps(
             dic,
             default_mapping=default_mapping,
@@ -216,19 +219,27 @@ class SerializationMixin:
             **kwargs,
         )
 
-    def to_dict(self, view_override: Optional[str]=None) -> dict:
+    def to_dict(self, verbose_level: Optional[int]=None) -> dict:
         """
-        convert the result to a python dictionary. You can override the view type by passing view_override.
+        Convert the result to a python dictionary.
 
         **Parameters**
 
-        view_override: view type, default=None,
-            override the view that was used to generate the diff when converting to the dictionary.
-            The options are the text or tree.
+        verbose_level: int, default=None
+            Override the verbose_level for the serialized output.
+            When None, the behavior depends on the original view:
+            - If the original view is 'text', the verbose_level from DeepDiff initialization is used.
+            - If the original view is 'tree', verbose_level=2 is used to provide the most detailed output.
+            Valid values are 0, 1, or 2.
         """
-
-        view = view_override if view_override else self.view  # type: ignore
-        return dict(self._get_view_results(view))  # type: ignore
+        if verbose_level is not None and verbose_level not in {0, 1, 2}:
+            raise ValueError('verbose_level should be 0, 1, or 2.')
+        if verbose_level is None:
+            if self.view == TREE_VIEW:  # type: ignore
+                verbose_level = 2
+            else:
+                verbose_level = self.verbose_level  # type: ignore
+        return dict(self._get_view_results(TEXT_VIEW, verbose_level=verbose_level))  # type: ignore
 
     def _to_delta_dict(
         self,

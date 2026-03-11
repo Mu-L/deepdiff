@@ -25,6 +25,7 @@ Please check the [ChangeLog](CHANGELOG.md) file for the detailed information.
 
 DeepDiff 8-7-0
 - support for python 3.14
+- `to_dict()` and `to_json()` now accept a `verbose_level` parameter and always return a usable text-view dict. When the original view is `'tree'`, they default to `verbose_level=2` for full detail. The old `view_override` parameter is removed.
 
 DeepDiff 8-6-1
 - Patched security vulnerability in the Delta class which was vulnerable to class pollution via its constructor, and when combined with a gadget available in DeltaDiff itself, it could lead to Denial of Service and Remote Code Execution (via insecure Pickle deserialization).

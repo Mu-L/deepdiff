@@ -11,6 +11,18 @@ To Dict
 -------
 
 In order to convert the DeepDiff object into a normal Python dictionary, use the to_dict() method.
+The result is always a text-view dictionary regardless of the original view used to create the DeepDiff object.
+
+**Parameters**
+
+verbose_level: int, default=None
+    Override the verbose_level for the serialized output.
+    When None, the behavior depends on the original view:
+
+    - If the original view is 'text', the verbose_level from DeepDiff initialization is used.
+    - If the original view is 'tree', verbose_level=2 is used to provide the most detailed output.
+
+    Valid values are 0, 1, or 2.
 
 Example:
     >>> t1 = {1: 1, 2: 2, 3: 3, 4: {"a": "hello", "b": [1, 2, 3]}}
@@ -20,14 +32,21 @@ Example:
     {'type_changes': {"root[4]['b']": {'old_type': <class 'list'>, 'new_type': <class 'str'>, 'old_value': [1, 2, 3], 'new_value': 'world\n\n\nEnd'}}}
 
 
-Note that you can override the :ref:`view_label` that was originally used to generate the diff here.
+When the original view is 'tree', to_dict() defaults to verbose_level=2 for the most detailed output:
 
 Example:
     >>> t1 = {1: 1, 2: 2, 3: 3, 4: {"a": "hello", "b": [1, 2, 3]}}
     >>> t2 = {1: 1, 2: 2, 3: 3, 4: {"a": "hello", "b": "world\n\n\nEnd"}}
     >>> ddiff = DeepDiff(t1, t2, view='tree')
-    >>> ddiff.to_dict(view_override='text')
+    >>> ddiff.to_dict()
     {'type_changes': {"root[4]['b']": {'old_type': <class 'list'>, 'new_type': <class 'str'>, 'old_value': [1, 2, 3], 'new_value': 'world\n\n\nEnd'}}}
+
+You can also override the verbose_level:
+
+Example:
+    >>> ddiff = DeepDiff(t1, t2, view='tree')
+    >>> ddiff.to_dict(verbose_level=0)
+    {'type_changes': {"root[4]['b']": {'old_type': <class 'list'>, 'new_type': <class 'str'>}}}
 
 .. _to_json_label:
 
@@ -45,6 +64,9 @@ default_mapping : dictionary(optional), a dictionary of mapping of different typ
 by default DeepDiff converts certain data types. For example Decimals into floats so they can be exported into json.
 If you have a certain object type that the json serializer can not serialize it, please pass the appropriate type
 conversion through this dictionary.
+
+verbose_level: int, default=None
+    Override the verbose_level for the serialized output. Same behavior as to_dict().
 
 kwargs: Any other kwargs you pass will be passed on to Python's json.dumps()
 

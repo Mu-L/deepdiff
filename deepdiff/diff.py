@@ -1810,7 +1810,7 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         else:
             self._diff_obj(level, parents_ids)
 
-    def _get_view_results(self, view):
+    def _get_view_results(self, view, verbose_level=None):
         """
         Get the results based on the view
         """
@@ -1820,7 +1820,8 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         if view == TREE_VIEW:
             pass
         elif view == TEXT_VIEW:
-            result = TextResult(tree_results=self.tree, verbose_level=self.verbose_level)
+            effective_verbose_level = verbose_level if verbose_level is not None else self.verbose_level
+            result = TextResult(tree_results=self.tree, verbose_level=effective_verbose_level)
             result.remove_empty_keys()
         elif view == DELTA_VIEW:
             result = self._to_delta_dict(report_repetition_required=False)

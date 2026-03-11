@@ -123,6 +123,74 @@ class TestSerialization:
         ddiff = DeepDiff(t1, t2, verbose_level=verbose_level)
         assert expected == ddiff.to_dict()
 
+    def test_to_dict_tree_view_defaults_to_verbose_level_2(self):
+        t1 = ['a', {1: 1, 3: 4}]
+        t2 = [10, {1: 2, 5: 6}, 'd']
+        ddiff = DeepDiff(t1, t2, view='tree')
+        result = ddiff.to_dict()
+        # tree view defaults to verbose_level=2: added/removed are dicts, not sets
+        expected = {
+            "type_changes": {"root[0]": {"old_type": str, "new_type": int, "old_value": "a", "new_value": 10}},
+            "dictionary_item_added": {"root[1][5]": 6},
+            "dictionary_item_removed": {"root[1][3]": 4},
+            "values_changed": {"root[1][1]": {"new_value": 2, "old_value": 1}},
+            "iterable_item_added": {"root[2]": "d"},
+        }
+        assert expected == result
+
+    @pytest.mark.parametrize('verbose_level, expected', [
+        (0, {"type_changes": {"root[0]": {"old_type": str, "new_type": int}}, "dictionary_item_added": ["root[1][5]"], "dictionary_item_removed": ["root[1][3]"], "iterable_item_added": {"root[2]": "d"}}),
+        (1, {"type_changes": {"root[0]": {"old_type": str, "new_type": int, "old_value": "a", "new_value": 10}}, "dictionary_item_added": ["root[1][5]"], "dictionary_item_removed": ["root[1][3]"], "values_changed": {"root[1][1]": {"new_value": 2, "old_value": 1}}, "iterable_item_added": {"root[2]": "d"}}),
+    ])
+    def test_to_dict_tree_view_with_verbose_level_override(self, verbose_level, expected):
+        t1 = ['a', {1: 1, 3: 4}]
+        t2 = [10, {1: 2, 5: 6}, 'd']
+        ddiff = DeepDiff(t1, t2, view='tree')
+        result = ddiff.to_dict(verbose_level=verbose_level)
+        assert expected == result
+
+    def test_to_dict_text_view_preserves_original_verbose_level(self):
+        t1 = ['a', {1: 1, 3: 4}]
+        t2 = [10, {1: 2, 5: 6}, 'd']
+        # verbose_level=2 at init, text view
+        ddiff = DeepDiff(t1, t2, verbose_level=2)
+        result = ddiff.to_dict()
+        # Should preserve verbose_level=2 from init
+        assert isinstance(result.get("dictionary_item_added"), dict)
+        assert result["dictionary_item_added"] == {"root[1][5]": 6}
+
+    def test_to_dict_text_view_with_verbose_level_override(self):
+        t1 = ['a', {1: 1, 3: 4}]
+        t2 = [10, {1: 2, 5: 6}, 'd']
+        # verbose_level=2 at init, but override to 1 in to_dict
+        ddiff = DeepDiff(t1, t2, verbose_level=2)
+        result = ddiff.to_dict(verbose_level=1)
+        # verbose_level=1: dictionary_item_added is not a dict (it's a SetOrdered)
+        assert not isinstance(result.get("dictionary_item_added"), dict)
+
+    def test_to_dict_invalid_verbose_level(self):
+        t1 = [1]
+        t2 = [2]
+        ddiff = DeepDiff(t1, t2)
+        with pytest.raises(ValueError):
+            ddiff.to_dict(verbose_level=3)
+
+    def test_to_json_with_verbose_level(self):
+        t1 = ['a', {1: 1, 3: 4}]
+        t2 = [10, {1: 2, 5: 6}, 'd']
+        ddiff = DeepDiff(t1, t2, view='tree')
+        result = json.loads(ddiff.to_json())
+        # tree view defaults to verbose_level=2 in to_json too
+        assert "root[1][5]" in result.get("dictionary_item_added", {})
+
+    def test_to_json_with_verbose_level_override(self):
+        t1 = ['a', {1: 1, 3: 4}]
+        t2 = [10, {1: 2, 5: 6}, 'd']
+        ddiff = DeepDiff(t1, t2, view='tree')
+        result = json.loads(ddiff.to_json(verbose_level=1))
+        # verbose_level=1: dictionary_item_added is a list
+        assert isinstance(result.get("dictionary_item_added"), list)
+
     def test_serialize_pydantic_model(self):
         obj = SampleSchema(
             works=True,
