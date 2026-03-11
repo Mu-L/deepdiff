@@ -28,6 +28,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: PyPy",
   "Development Status :: 5 - Production/Stable",
   "License :: OSI Approved :: MIT License"
@@ -36,26 +37,31 @@ classifiers = [
 # `dependency-groups` would make this a lot cleaner, in theory.
 [project.optional-dependencies]
 coverage = [
-  "coverage~=7.6.0"
+  "coverage~=7.13.4; python_version >= '3.10'",
+  "coverage~=7.10.7; python_version < '3.10'"
 ]
 cli = [
-  "click~=8.1.0",
-  "pyyaml~=6.0.0"
+  "click~=8.3.1; python_version >= '3.10'",
+  "click~=8.1.7; python_version < '3.10'",
+  "pyyaml~=6.0.3"
 ]
 dev = [
-  "bump2version~=1.0.0",
-  "jsonpickle~=4.0.0",
-  "ipdb~=0.13.0",
-  "numpy~=2.2.0; python_version >= '3.10'",
+  "bump2version~=1.0.1",
+  "jsonpickle~=4.1.1",
+  "ipdb~=0.13.13",
+  "numpy~=2.4.3; python_version >= '3.14'",
+  "numpy~=2.2.0; python_version < '3.14' and python_version >= '3.10'",
   "numpy~=2.0; python_version < '3.10'",
-  "python-dateutil~=2.9.0",
-  "orjson~=3.10.0",
-  "tomli~=2.2.0",
+  "python-dateutil~=2.9.0.post0",
+  "orjson~=3.11.7; python_version >= '3.10'",
+  "tomli~=2.4.0",
   "tomli-w~=1.2.0",
-  "pandas~=2.2.0",
-  "polars~=1.21.0",
-  "nox==2025.5.1",
+  "pandas~=3.0.1; python_version >= '3.11'",
+  "pandas~=2.2.0; python_version < '3.11'",
+  "polars~=1.38.1; python_version >= '3.10'",
+  "nox==2026.2.9",
   "uuid6==2025.0.1",
+  "pytz",
 ]
 docs = [
   # We use the html style that is not supported in Sphinx 7 anymore.
@@ -66,13 +72,16 @@ docs = [
 static = [
   "flake8~=7.1.0",
   "flake8-pyproject~=1.2.3",
-  "pydantic~=2.10.0",
+  "pydantic~=2.12.5",
 ]
 test = [
-  "pytest~=8.3.0",
-  "pytest-benchmark~=5.1.0",
-  "pytest-cov~=6.0.0",
-  "python-dotenv~=1.0.0",
+  "pytest~=9.0.2; python_version >= '3.10'",
+  "pytest~=8.3.4; python_version < '3.10'",
+  "pytest-benchmark~=5.2.3",
+  "pytest-cov~=7.0.0; python_version >= '3.10'",
+  "pytest-cov~=6.0.0; python_version < '3.10'",
+  "python-dotenv~=1.2.2; python_version >= '3.10'",
+  "python-dotenv~=1.0.1; python_version < '3.10'",
 ]
 optimize = [
   "orjson",
