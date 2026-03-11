@@ -736,6 +736,25 @@ def json_dumps(
     ...
 
 
+_INT64_MAX = 9223372036854775807
+_INT64_MIN = -9223372036854775808
+
+
+def _convert_oversized_ints(obj):
+    """Recursively convert integers exceeding 64-bit range to strings.
+    orjson cannot serialize integers outside the signed 64-bit range."""
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, int) and (obj > _INT64_MAX or obj < _INT64_MIN):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {k: _convert_oversized_ints(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        converted = [_convert_oversized_ints(v) for v in obj]
+        return type(obj)(converted)
+    return obj
+
+
 def json_dumps(
     item: Any,
     default_mapping:Optional[dict]=None,
@@ -763,10 +782,20 @@ def json_dumps(
                 "orjson does not accept the sort_keys parameter. "
                 "If you need to pass sort_keys, set force_use_builtin_json=True "
                 "to use Python's built-in json library instead of orjson.")
-        result = orjson.dumps(
-            item,
-            default=json_convertor_default(default_mapping=default_mapping),
-            **kwargs)
+        try:
+            result = orjson.dumps(
+                item,
+                default=json_convertor_default(default_mapping=default_mapping),
+                **kwargs)
+        except TypeError as e:
+            if 'Integer exceeds 64-bit range' in str(e):
+                item = _convert_oversized_ints(item)
+                result = orjson.dumps(
+                    item,
+                    default=json_convertor_default(default_mapping=default_mapping),
+                    **kwargs)
+            else:
+                raise
         if return_bytes:
             return result
         return result.decode(encoding='utf-8')

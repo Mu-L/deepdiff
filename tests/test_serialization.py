@@ -541,6 +541,42 @@ class TestDeepDiffPretty:
         assert expected_non_utf8_b64 in serialized
         assert deserialized["non_utf8_byte"] == expected_non_utf8_b64
 
+    def test_json_dumps_large_int_exceeding_64bit(self):
+        """Test that integers exceeding 64-bit range are serialized as strings.
+        orjson cannot handle integers larger than 64-bit (9223372036854775807),
+        so json_dumps should convert them to strings."""
+        large_int = 59579472846392086780
+        assert large_int > 9223372036854775807  # larger than max int64
+
+        data = {'max_int': large_int, 'min_int': 1336138}
+        serialized = json_dumps(data)
+        back = json_loads(serialized)
+        assert back['max_int'] == str(large_int)
+        assert back['min_int'] == 1336138
+
+    def test_json_dumps_large_int_in_nested_structure(self):
+        """Test large integers in nested data structures are converted to strings."""
+        large_int = 59579472846392086780
+        data = {
+            'stats': {
+                'counter': {'HasInt': 499},
+                'max_int': large_int,
+                'min_int': 1336138,
+            },
+            'name': 'policy_number',
+        }
+        serialized = json_dumps(data)
+        back = json_loads(serialized)
+        assert back['stats']['max_int'] == str(large_int)
+
+    def test_json_dumps_large_negative_int(self):
+        """Test that large negative integers are also converted to strings."""
+        large_neg_int = -59579472846392086780
+        data = {'value': large_neg_int}
+        serialized = json_dumps(data)
+        back = json_loads(serialized)
+        assert back['value'] == str(large_neg_int)
+
     def test_bytes_in_deepdiff_serialization(self):
         """Test that bytes work correctly in DeepDiff JSON serialization"""
         t1 = {
