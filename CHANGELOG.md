@@ -1,6 +1,7 @@
 # DeepDiff Change log
 
 - v8-7-0
+    - Dropping support for Python 3.9
     - Support for python 3.14
     - `to_dict()` and `to_json()` now accept a `verbose_level` parameter and always return a usable text-view dict. When the original view is `'tree'`, they default to `verbose_level=2` for full detail. The old `view_override` parameter is removed.
 

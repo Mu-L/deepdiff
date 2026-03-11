@@ -15,7 +15,7 @@
 - [Extract](https://zepworks.com/deepdiff/current/extract.html): Extract an item from a nested Python object using its path.
 - [commandline](https://zepworks.com/deepdiff/current/commandline.html): Use DeepDiff from commandline.
 
-Tested on Python 3.9+ and PyPy3.
+Tested on Python 3.10+ and PyPy3.
 
 - **[Documentation](https://zepworks.com/deepdiff/8.7.0/)**
 
@@ -24,7 +24,8 @@ Tested on Python 3.9+ and PyPy3.
 Please check the [ChangeLog](CHANGELOG.md) file for the detailed information.
 
 DeepDiff 8-7-0
-- support for python 3.14
+- Dropping support for Python 3.9
+- Support for python 3.14
 - `to_dict()` and `to_json()` now accept a `verbose_level` parameter and always return a usable text-view dict. When the original view is `'tree'`, they default to `verbose_level=2` for full detail. The old `view_override` parameter is removed.
 
 DeepDiff 8-6-1

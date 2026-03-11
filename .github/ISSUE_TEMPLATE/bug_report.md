@@ -21,7 +21,7 @@ A clear and concise description of what you expected to happen.
 **OS, DeepDiff version and Python version (please complete the following information):**
  - OS: [e.g. Ubuntu]
  - Version [e.g. 20LTS]
- - Python Version [e.g. 3.9.12]
+ - Python Version [e.g. 3.10.12]
  - DeepDiff Version [e.g. 5.8.0]
 
 **Additional context**
