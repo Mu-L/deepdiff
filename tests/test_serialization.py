@@ -577,6 +577,49 @@ class TestDeepDiffPretty:
         back = json_loads(serialized)
         assert back['value'] == str(large_neg_int)
 
+    def test_json_dumps_namedtuple_with_large_int(self):
+        """Test that a NamedTuple containing an oversized int is properly serialized.
+        _convert_oversized_ints must reconstruct the NamedTuple via _fields, not
+        pass a flat list to its constructor (which fails for NamedTuples with
+        required keyword arguments)."""
+        large_int = 59579472846392086780
+        stats = SomeStats(
+            counter=Counter(["a", "b"]),
+            context_aware_counter=Counter(),
+            min_int=0,
+            max_int=large_int,
+        )
+        data = {'stats': stats}
+        serialized = json_dumps(data)
+        back = json_loads(serialized)
+        assert back['stats']['max_int'] == str(large_int)
+        assert back['stats']['min_int'] == 0
+
+    def test_json_dumps_dict_of_namedtuples_with_large_int(self):
+        """Test a dict of NamedTuples where one contains an oversized int.
+        This mirrors the real-world pattern of field stats keyed by column name."""
+        large_int = 59579472846392086780
+        stats_map = {
+            'normal_field': SomeStats(counter=Counter(["x"]), max_int=10),
+            'big_field': SomeStats(counter=Counter(["y"]), max_int=large_int),
+        }
+        serialized = json_dumps(stats_map)
+        back = json_loads(serialized)
+        assert back['normal_field']['max_int'] == 10
+        assert back['big_field']['max_int'] == str(large_int)
+
+    def test_json_dumps_namedtuple_with_large_int_in_list(self):
+        """Test a list of NamedTuples where one has an oversized int."""
+        large_int = 59579472846392086780
+        data = [
+            SomeStats(counter=Counter(), max_int=5),
+            SomeStats(counter=Counter(), max_int=large_int),
+        ]
+        serialized = json_dumps(data)
+        back = json_loads(serialized)
+        assert back[0]['max_int'] == 5
+        assert back[1]['max_int'] == str(large_int)
+
     def test_bytes_in_deepdiff_serialization(self):
         """Test that bytes work correctly in DeepDiff JSON serialization"""
         t1 = {

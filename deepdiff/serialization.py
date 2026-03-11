@@ -751,6 +751,9 @@ def _convert_oversized_ints(obj):
         return {k: _convert_oversized_ints(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
         converted = [_convert_oversized_ints(v) for v in obj]
+        if hasattr(obj, '_fields'):
+            # NamedTuple: reconstruct using keyword arguments
+            return type(obj)(**dict(zip(obj._fields, converted)))
         return type(obj)(converted)
     return obj
 
