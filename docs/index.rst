@@ -31,6 +31,11 @@ The DeepDiff library includes the following modules:
 What Is New
 ***********
 
+DeepDiff 8-6-2
+--------------
+
+    - Security fix (CVE-2025-58367): Prevent denial-of-service via crafted pickle payloads that trigger massive memory allocation through the REDUCE opcode. Size-sensitive callables like ``bytes()`` and ``bytearray()`` are now wrapped to reject allocations exceeding 128 MB.
+
 DeepDiff 8-6-1
 --------------
 

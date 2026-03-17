@@ -118,6 +118,7 @@ and polars support.
 - `Enji Cooper <https://github.com/ngie-eign>`__ for converting legacy
   setuptools use to pyproject.toml
 - `Diogo Correia <https://github.com/diogotcorreia>`__ for reporting security vulnerability in Delta and DeepDiff that could allow remote code execution.
+- `am-periphery <https://github.com/am-periphery>`__ for reporting CVE-2025-58367: denial-of-service via crafted pickle payloads triggering massive memory allocation.
 
 
 .. _Sep Dehpour (Seperman): http://www.zepworks.com
