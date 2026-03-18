@@ -155,6 +155,58 @@ class TestLoadContet:
             load_path_content(path)
 
 
+class TestPicklingSecurity:
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="Resource module is Unix-only")
+    def test_restricted_unpickler_memory_exhaustion_cve(self):
+        """CVE-2026-33155: Prevent DoS via massive allocation through REDUCE opcode.
+
+        The payload calls bytes(10_000_000_000) which is allowed by find_class
+        but would allocate ~9.3GB of memory. The fix should reject this before
+        the allocation happens.
+        """
+        import resource
+
+        # 1. Cap memory to 500MB to prevent system freezes during the test
+        soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+        maxsize_bytes = 500 * 1024 * 1024
+        resource.setrlimit(resource.RLIMIT_AS, (maxsize_bytes, hard))
+
+        try:
+            # 2. Malicious payload: attempts to allocate ~9.3GB via bytes(10000000000)
+            # This uses allowed builtins but passes a massive integer via REDUCE
+            payload = (
+                b"(dp0\n"
+                b"S'_'\n"
+                b"cbuiltins\nbytes\n"
+                b"(I10000000000\n"
+                b"tR"
+                b"s."
+            )
+
+            # 3. After the patch, deepdiff should catch the size violation
+            # and raise UnpicklingError before attempting allocation.
+            with pytest.raises((ValueError, UnpicklingError)):
+                pickle_load(payload)
+        finally:
+            # Restore original memory limit so other tests are not affected
+            resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
+
+    def test_restricted_unpickler_allows_small_bytes(self):
+        """Ensure legitimate small bytes objects can still be deserialized."""
+        # Payload: {'_': bytes(100)} — well within the 128MB limit
+        payload = (
+            b"(dp0\n"
+            b"S'_'\n"
+            b"cbuiltins\nbytes\n"
+            b"(I100\n"
+            b"tR"
+            b"s."
+        )
+        result = pickle_load(payload)
+        assert result == {'_': bytes(100)}
+
+
 class TestPickling:
 
     def test_serialize(self):
