@@ -39,6 +39,10 @@ DeepDiff 8-7-0
    - Dropping support for Python 3.9
    - Support for python 3.14
 
+DeepDiff 8-6-2
+--------------
+
+    - Security fix (CVE-2026-33155): Prevent denial-of-service via crafted pickle payloads that trigger massive memory allocation through the REDUCE opcode. Size-sensitive callables like ``bytes()`` and ``bytearray()`` are now wrapped to reject allocations exceeding 128 MB.
 
 DeepDiff 8-6-1
 --------------

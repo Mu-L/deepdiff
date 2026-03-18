@@ -29,6 +29,8 @@ DeepDiff 8-7-0
 - Dropping support for Python 3.9
 - Support for python 3.14
 
+DeepDiff 8-6-2
+- **Security (CVE-2026-33155):** Fixed a memory exhaustion DoS vulnerability in `_RestrictedUnpickler` by limiting the maximum allocation size for `bytes` and `bytearray` during deserialization.
 
 DeepDiff 8-6-1
 - Patched security vulnerability in the Delta class which was vulnerable to class pollution via its constructor, and when combined with a gadget available in DeltaDiff itself, it could lead to Denial of Service and Remote Code Execution (via insecure Pickle deserialization).
