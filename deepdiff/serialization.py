@@ -333,7 +333,7 @@ class SerializationMixin:
 
 # Maximum size allowed for integer arguments to constructors that allocate
 # memory proportional to the argument (e.g. bytes(n), bytearray(n)).
-# This prevents denial-of-service via crafted pickle payloads. (CVE-2025-58367)
+# This prevents denial-of-service via crafted pickle payloads. (CVE-2026-33155)
 _MAX_ALLOC_SIZE = 128 * 1024 * 1024  # 128 MB
 
 # Callables where an integer argument directly controls memory allocation size.

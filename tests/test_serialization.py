@@ -159,7 +159,7 @@ class TestPicklingSecurity:
 
     @pytest.mark.skipif(sys.platform == "win32", reason="Resource module is Unix-only")
     def test_restricted_unpickler_memory_exhaustion_cve(self):
-        """CVE-2025-58367: Prevent DoS via massive allocation through REDUCE opcode.
+        """CVE-2026-33155: Prevent DoS via massive allocation through REDUCE opcode.
 
         The payload calls bytes(10_000_000_000) which is allowed by find_class
         but would allocate ~9.3GB of memory. The fix should reject this before

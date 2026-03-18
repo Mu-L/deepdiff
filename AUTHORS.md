@@ -76,4 +76,4 @@ Authors in order of the timeline of their contributions:
 - [Jim Cipar](https://github.com/jcipar) for the fix recursion depth limit when hashing numpy.datetime64
 - [Enji Cooper](https://github.com/ngie-eign) for converting legacy setuptools use to pyproject.toml
 - [Diogo Correia](https://github.com/diogotcorreia) for reporting security vulnerability in Delta and DeepDiff that could allow remote code execution.
-- [am-periphery](https://github.com/am-periphery) for reporting CVE-2025-58367: denial-of-service via crafted pickle payloads triggering massive memory allocation.
+- [am-periphery](https://github.com/am-periphery) for reporting CVE-2026-33155: denial-of-service via crafted pickle payloads triggering massive memory allocation.

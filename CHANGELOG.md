@@ -1,7 +1,7 @@
 # DeepDiff Change log
 
 - v8-6-2
-    - Security fix (CVE-2025-58367): Prevent denial-of-service via crafted pickle payloads that trigger massive memory allocation through the REDUCE opcode. Size-sensitive callables like `bytes()` and `bytearray()` are now wrapped to reject allocations exceeding 128 MB.
+    - Security fix (CVE-2026-33155): Prevent denial-of-service via crafted pickle payloads that trigger massive memory allocation through the REDUCE opcode. Size-sensitive callables like `bytes()` and `bytearray()` are now wrapped to reject allocations exceeding 128 MB.
 
 - v8-6-1
     - Patched security vulnerability in the Delta class which was vulnerable to class pollution via its constructor, and when combined with a gadget available in DeltaDiff itself, it could lead to Denial of Service and Remote Code Execution (via insecure Pickle deserialization).
