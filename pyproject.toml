@@ -86,8 +86,8 @@ deep = "deepdiff.commands:cli"
 [project.urls]
 Homepage = "https://zepworks.com/deepdiff/"
 Documentation = "https://zepworks.com/deepdiff/"
-Repository = "https://github.com/seperman/deepdiff"
-Issues = "https://github.com/seperman/deepdiff/issues"
+Repository = "https://github.com/qlustered/deepdiff"
+Issues = "https://github.com/qlustered/deepdiff/issues"
 
 [tool.coverage.run]
 branch = true
