@@ -3,6 +3,10 @@
 F.A.Q
 =====
 
+**DeepDiff is now part of** `Qluster <https://qluster.ai>`__.
+
+*If you're building workflows around data validation and correction,* `Qluster <https://qluster.ai>`__ *gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
+
 .. Note::
     |:mega:| **Please fill out our** `fast 5-question survey <https://forms.gle/E6qXexcgjoKnSzjB8>`__ so that we can learn how & why you use DeepDiff, and what improvements we should make. Thank you! |:dancers:|
 
@@ -173,15 +177,5 @@ That is different than what Python does. Python assumes your timezone naive date
 
 
 ---------
-
-.. admonition:: A message from `Sep <https://github.com/seperman>`__, the creator of DeepDiff
-
-    | 👋 Hi there,
-    |
-    | Thank you for using DeepDiff!
-    | As an engineer, I understand the frustration of wrestling with **unruly data** in pipelines.
-    | That's why I developed a new tool - `Qluster <https://qluster.ai/solution>`__ to empower non-engineers to control and resolve data issues at scale autonomously and **stop bugging the engineers**! 🛠️
-    |
-    | If you are going through this pain now, I would love to give you `early access <https://www.qluster.ai/try-qluster>`__ to Qluster and get your feedback.
 
 Back to :doc:`/index`

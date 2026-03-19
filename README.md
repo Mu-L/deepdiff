@@ -6,6 +6,10 @@
 [![Build Status](https://github.com/seperman/deepdiff/workflows/Unit%20Tests/badge.svg)](https://github.com/seperman/deepdiff/actions)
 [![codecov](https://codecov.io/gh/seperman/deepdiff/branch/master/graph/badge.svg?token=KkHZ3siA3m)](https://codecov.io/gh/seperman/deepdiff)
 
+**DeepDiff is now part of [Qluster](https://qluster.ai).**
+
+*If you're building workflows around data validation and correction, [Qluster](https://qluster.ai) gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
+
 ## Modules
 
 - [DeepDiff](https://zepworks.com/deepdiff/current/diff.html): Deep Difference of dictionaries, iterables, strings, and ANY other object.
@@ -98,17 +102,6 @@ Install optional packages:
 # Documentation
 
 <https://zepworks.com/deepdiff/current/>
-
-### A message from Sep, the creator of DeepDiff
-
-> 👋 Hi there,
->
-> Thank you for using DeepDiff!
-> As an engineer, I understand the frustration of wrestling with **unruly data** in pipelines.
-> That's why I developed a new tool - [Qluster](https://qluster.ai/solution) to empower non-engineers to control and resolve data issues at scale autonomously and **stop bugging the engineers**! 🛠️
->
-> If you are going through this pain now, I would love to give you [early access](https://www.qluster.ai/try-qluster) to Qluster and get your feedback.
-
 
 # ChangeLog
 
