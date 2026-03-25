@@ -2932,3 +2932,65 @@ class TestDeltaCompareFunc:
         beforeImageAgain2 = allAfterImage - delta2
         diff4 = DeepDiff(beforeImage, beforeImageAgain2, ignore_order=True)
         assert not diff4
+
+    def test_moved_and_changed_flat(self):
+        """Items that both move (due to prepended inserts) and change values
+        should produce t2 with no phantom entries after delta replay."""
+        t1 = [{"id": "a", "val": 1}, {"id": "b", "val": 2},
+            {"id": "c", "val": 3}]
+        t2 = [
+            {"id": "new1", "val": 10},  # inserted at [0]
+            {"id": "new2", "val": 20},  # inserted at [1]
+            {"id": "a", "val": 0.5},    # moved [0]→[2], val changed
+            {"id": "b", "val": 1.0},    # moved [1]→[3], val changed
+            {"id": "c", "val": 1.5},    # moved [2]→[4], val changed
+        ]
+        ddiff = DeepDiff(t1, t2, iterable_compare_func=self.compare_func,
+                        threshold_to_diff_deeper=0)
+        result = t1 + Delta(ddiff, force=True, raise_errors=True,
+                            log_errors=False)
+        assert [item for item in result if "id" not in item] == [], \
+            "Phantom entries (dicts missing 'id') found in result"
+        assert result == t2
+
+    def test_moved_and_changed_nested(self):
+        """Same bug in a nested structure: inner list items that both move and
+        change values should produce no phantom entries after delta replay."""
+        t1 = {"rows": [
+            {"id": "r1", "items": [{"id": "a", "val": 1},
+                                {"id": "b", "val": 2}]},
+            ]}
+        t2 = {"rows": [
+            {"id": "r1", "items": [
+                {"id": "new1", "val": 99},  # inserted at [0]
+                {"id": "a", "val": 0.5},    # moved [0]→[1], val changed
+                {"id": "b", "val": 1.0},    # moved [1]→[2], val changed
+            ]},
+        ]}
+        ddiff = DeepDiff(t1, t2, iterable_compare_func=self.compare_func,
+                        threshold_to_diff_deeper=0)
+        result = t1 + Delta(ddiff, force=True, raise_errors=True,
+                            log_errors=False)
+        assert [item for item in result["rows"][0][
+            "items"] if "id" not in item] == [], \
+            "Phantom entries (dicts missing 'id') found in nested result"
+        assert result == t2
+
+    def test_appended_only_no_movement_sanity_check(self):
+        """
+        When new items are only appended (existing items keep their positions),
+        stock Delta produces the correct result with no phantom entries.
+        """
+        t1 = [{"id": "a", "val": 1}, {"id": "b", "val": 2}]
+        t2 = [
+            {"id": "a", "val": 0.5},    # stays at [0], val changed
+            {"id": "b", "val": 1.0},    # stays at [1], val changed
+            {"id": "new1", "val": 10},  # appended
+            {"id": "new2", "val": 20},  # appended
+        ]
+        ddiff = DeepDiff(t1, t2, iterable_compare_func=self.compare_func,
+                        threshold_to_diff_deeper=0)
+        result = t1 + Delta(ddiff, force=True, raise_errors=True,
+                            log_errors=False)
+        assert [item for item in result if "id" not in item] == []
+        assert result == t2
