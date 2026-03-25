@@ -9,7 +9,7 @@ import string
 import time
 import enum
 import ipaddress
-from typing import NamedTuple, Any, List, Optional, Dict, Union, TYPE_CHECKING, Tuple, Iterable, Iterator, Set, FrozenSet, Callable, Pattern, Type, TypeVar, Generic, Literal, overload
+from typing import NamedTuple, Any, List, Optional, Dict, Union, TYPE_CHECKING, Tuple, Iterable, Iterator, Set, FrozenSet, Callable, Pattern, Type, TypeVar, Generic, Literal, overload, TypedDict
 from collections.abc import Mapping, Sequence, Generator
 from ast import literal_eval
 from decimal import Decimal, localcontext, InvalidOperation as InvalidDecimalOperation
@@ -841,6 +841,23 @@ class FlatDeltaRow(NamedTuple):
     t2_to_index: Optional[int] = None
 
     __repr__ = __str__ = named_tuple_repr
+
+
+class _FlatDeltaDictRequired(TypedDict):
+    path: List
+    action: FlatDataAction
+
+
+class FlatDeltaDict(_FlatDeltaDictRequired, total=False):
+    value: Optional[Any]
+    old_value: Optional[Any]
+    type: Optional[Any]
+    old_type: Optional[Any]
+    new_path: Optional[List]
+    t1_from_index: Optional[int]
+    t1_to_index: Optional[int]
+    t2_from_index: Optional[int]
+    t2_to_index: Optional[int]
 
 
 JSON = Union[Dict[str, str], List[str], List[int], Dict[str, "JSON"], List["JSON"], str, int, float, bool, None]

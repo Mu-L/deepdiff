@@ -1,6 +1,6 @@
 import copy
 import logging
-from typing import List, Dict, IO, Callable, Set, Union, Optional, Any
+from typing import List, Dict, IO, Callable, Set, Union, Optional, Any, cast
 from functools import partial, cmp_to_key
 from collections.abc import Mapping
 from copy import deepcopy
@@ -10,7 +10,7 @@ from deepdiff.helper import (
     strings, numbers,
     np_ndarray, np_array_factory, numpy_dtypes, get_doc,
     not_found, numpy_dtype_string_to_type, dict_,
-    Opcode, FlatDeltaRow, UnkownValueCode, FlatDataAction,
+    Opcode, FlatDeltaRow, FlatDeltaDict, UnkownValueCode, FlatDataAction,
     OPCODE_TAG_TO_FLAT_DATA_ACTION,
     FLAT_DATA_ACTION_TO_OPCODE_TAG,
     SetOrdered,
@@ -1065,7 +1065,7 @@ class Delta:
 
         return result
 
-    def to_flat_dicts(self, include_action_in_path=False, report_type_changes=True) -> List[FlatDeltaRow]:
+    def to_flat_dicts(self, include_action_in_path=False, report_type_changes=True) -> List[FlatDeltaDict]:
         """
         Returns a flat list of actions that is easily machine readable.
 
@@ -1119,9 +1119,9 @@ class Delta:
             attribute_added
             attribute_removed
         """
-        return [
-            i._asdict() for i in self.to_flat_rows(include_action_in_path=False, report_type_changes=True)
-        ]  # type: ignore
+        return cast(List[FlatDeltaDict], [
+            i._asdict() for i in self.to_flat_rows(include_action_in_path=include_action_in_path, report_type_changes=report_type_changes)
+        ])
 
     def to_flat_rows(self, include_action_in_path=False, report_type_changes=True) -> List[FlatDeltaRow]:
         """
