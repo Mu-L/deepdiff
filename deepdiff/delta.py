@@ -553,8 +553,9 @@ class Delta:
     def _do_values_or_type_changed(self, changes, is_type_change=False, verify_changes=True):
         compare_func_was_used = self.diff.get('_iterable_compare_func_was_used', False)
         for path, value in changes.items():
-            # When iterable_compare_func is used, keys in values_changed/type_changes are
-            # t2 paths and new_path holds the original t1 path. Always apply at t1 so we
+            # When iterable_compare_func is used, DiffLevel.path() inverts use_t2 for
+            # moved items (see model.py DiffLevel.path). This means dict keys here are
+            # actually t2 paths and new_path holds the t1 path. Apply at t1 so we
             # don't access indices that don't exist yet or modify the wrong item.
             apply_path = value['new_path'] if (compare_func_was_used and value.get('new_path')) else path
             elem_and_details = self._get_elements_and_details(apply_path)

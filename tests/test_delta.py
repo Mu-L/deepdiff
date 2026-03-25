@@ -2994,3 +2994,19 @@ class TestDeltaCompareFunc:
                             log_errors=False)
         assert [item for item in result if "id" not in item] == []
         assert result == t2
+
+    def test_moved_and_type_changed(self):
+        """Items that both move and change type should apply correctly."""
+        t1 = [{"id": "a", "val": "1"}, {"id": "b", "val": "2"}]
+        t2 = [
+            {"id": "new1", "val": 99},
+            {"id": "a", "val": 1},      # moved [0]->[1], val str->int
+            {"id": "b", "val": 2},      # moved [1]->[2], val str->int
+        ]
+        ddiff = DeepDiff(t1, t2, iterable_compare_func=self.compare_func,
+                        threshold_to_diff_deeper=0)
+        result = t1 + Delta(ddiff, force=True, raise_errors=True,
+                            log_errors=False)
+        assert [item for item in result if "id" not in item] == [], \
+            "Phantom entries (dicts missing 'id') found in result"
+        assert result == t2
