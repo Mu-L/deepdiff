@@ -281,6 +281,27 @@ class DeepHash(Base):
                              ignore_numeric_type_changes=self.ignore_numeric_type_changes)
 
     @staticmethod
+    def _get_slots_dict(obj: Any) -> Dict[str, Any]:
+        """Get a dict of initialized slot attributes.
+
+        Uses object.__getattribute__ to check each slot directly, bypassing
+        __getattr__. For uninitialized slots on classes that define __getattr__,
+        falls back to getattr — letting it raise if the object is truly broken.
+        """
+        result = {}
+        has_getattr = hasattr(type(obj), '__getattr__')
+        for slot in obj.__slots__:
+            try:
+                result[slot] = object.__getattribute__(obj, slot)
+            except AttributeError:
+                if has_getattr:
+                    # The slot isn't initialized, but the class defines __getattr__.
+                    # Try the normal getattr to let __getattr__ provide a value or
+                    # raise — if it raises, we propagate to fail the strategy.
+                    result[slot] = getattr(obj, slot)
+        return result
+
+    @staticmethod
     def _getitem(hashes: Dict[Any, Any], obj: Any, extract_index: Optional[int] = 0,
                  use_enum_value: bool = False, ignore_numeric_type_changes: bool = False) -> Any:
         """
@@ -415,7 +436,7 @@ class DeepHash(Base):
             obj_to_dict_strategies.append(lambda o: o.__dict__)
 
         if hasattr(obj, "__slots__"):
-            obj_to_dict_strategies.append(lambda o: {i: getattr(o, i) for i in o.__slots__ if hasattr(o, i)})
+            obj_to_dict_strategies.append(lambda o: DeepHash._get_slots_dict(o))
         else:
             import inspect
             obj_to_dict_strategies.append(lambda o: dict(inspect.getmembers(o, lambda m: not inspect.isroutine(m))))
