@@ -134,6 +134,36 @@ def test_colored_view_list_additions():
     assert result == expected
 
 
+def test_colored_view_list_all_items_removed():
+    """Test that all removed items are displayed when list becomes empty."""
+    t1 = [2, 4]
+    t2 = []
+
+    diff = DeepDiff(t1, t2, view=COLORED_VIEW)
+    result = str(diff)
+
+    expected = f'''[
+  {RED}2{RESET},
+  {RED}4{RESET}
+]'''
+    assert result == expected
+
+
+def test_colored_compact_view_list_all_items_removed():
+    """Test that all removed items are displayed when list becomes empty with compact view."""
+    t1 = [2, 4]
+    t2 = []
+
+    diff = DeepDiff(t1, t2, view=COLORED_COMPACT_VIEW)
+    result = str(diff)
+
+    expected = f'''[
+  {RED}2{RESET},
+  {RED}4{RESET}
+]'''
+    assert result == expected
+
+
 def test_colored_view_list_changes_deletions():
     t1 = [1, 5, 7, 3, 6]
     t2 = [1, 2, 3, 4]
