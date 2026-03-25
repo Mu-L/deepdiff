@@ -1,6 +1,6 @@
 from deepdiff import DeepDiff
 from deepdiff.helper import COLORED_VIEW, COLORED_COMPACT_VIEW
-from deepdiff.colored_view import RED, GREEN, RESET
+from deepdiff.colored_view import RED, GREEN, RESET, ColoredView
 
 
 def test_colored_view_basic():
@@ -455,3 +455,41 @@ def test_colored_view_bool_evaluation():
     # Scenario 2: With differences
     diff_with_diff_compact = DeepDiff(t1_with_diff, t2_with_diff, view=COLORED_COMPACT_VIEW)
     assert bool(diff_with_diff_compact), "bool(diff) should be True when diffs exist (compact view)"
+
+
+def test_colored_view_with_empty_list_shows_removals():
+    """
+    Tests ColoredView correctly shows about an empty list.
+    This covers the bug where it would just show '[]'.
+    """
+    t1 = [1, 2, 3]
+    t2 = []
+    ddiff = DeepDiff(t1, t2)
+    view = ColoredView(t2, ddiff.tree)
+    result = str(view)
+
+    # The output should contain the removed items, colored in red.
+    assert f"{RED}1{RESET}" in result
+    assert f"{RED}2{RESET}" in result
+    assert f"{RED}3{RESET}" in result
+    assert result.strip().startswith('[')
+    assert result.strip().endswith(']')
+    assert result != '[]'
+
+
+def test_colored_view_with_empty_dict_shows_removals():
+    """
+    Tests ColoredView correctly shows about an empty dict.
+    This covers the bug where it would just show '{}'.
+    """
+    t1 = {'a': 1, 'b': 2}
+    t2 = {}
+    ddiff = DeepDiff(t1, t2)
+    view = ColoredView(t2, ddiff.tree)
+    result = str(view)
+
+    assert f'{RED}{{"a": 1' in result
+    assert f'"b": 2}}{RESET}' in result
+    assert result.strip().startswith(RED)
+    assert result.strip().endswith(RESET)
+    assert result != '{}'
