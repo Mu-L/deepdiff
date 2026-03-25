@@ -232,6 +232,105 @@ class TestDeepHash:
         assert 'set_item_added' in diff
         assert str(dummy_id_2) in str(diff)
 
+    def test_slots_with_uninitialized_attributes(self):
+        """Test that DeepHash handles classes with __slots__ where not all slots are initialized."""
+        class PartiallyInitialized:
+            __slots__ = ['x', 'y', 'z']
+
+            def __init__(self, x):
+                self.x = x
+
+        obj = PartiallyInitialized(10)
+        result = DeepHash(obj)
+        # Should not raise AttributeError iternally, and should successfully hash the object
+        assert result[obj] is not unprocessed
+
+    def test_slots_fully_initialized(self):
+        """Test that DeepHash correctly hashes classes with __slots__ where all slots are initialized."""
+        class FullyInitialized:
+            __slots__ = ['x', 'y']
+
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+
+        obj1 = FullyInitialized(1, 2)
+        obj2 = FullyInitialized(1, 2)
+        obj3 = FullyInitialized(3, 4)
+
+        hash1 = DeepHash(obj1)
+        hash2 = DeepHash(obj2)
+        hash3 = DeepHash(obj3)
+
+        # Same values should produce same hash
+        assert hash1[obj1] == hash2[obj2]
+        # Different values should produce different hash
+        assert hash1[obj1] != hash3[obj3]
+
+    def test_slots_with_no_initialized_attributes(self):
+        """Test that DeepHash handles classes with __slots__ where no slots are initialized."""
+        class EmptySlots:
+            __slots__ = ['a', 'b', 'c']
+
+            def __init__(self):
+                pass
+
+        obj = EmptySlots()
+        result = DeepHash(obj)
+        assert result[obj] is not unprocessed
+
+    def test_slots_inheritance(self):
+        """Test that DeepHash handles inherited __slots__ correctly."""
+        class Base:
+            __slots__ = ['x']
+
+            def __init__(self, x):
+                self.x = x
+
+        class Derived(Base):
+            __slots__ = ['y', 'z']
+
+            def __init__(self, x, y):
+                super().__init__(x)
+                self.y = y
+
+        obj = Derived(1, 2)
+        result = DeepHash(obj)
+        # Should still not raise AttributeError internally for uninitialized 'z'
+        assert result[obj] is not unprocessed
+
+    def test_slots_deepdiff_comparison(self):
+        """Test that DeepDiff also works correctly with __slots__ classes (incl inherited and uninitialized attributes)."""
+        class Base:
+            __slots__ = ['x']
+
+            def __init__(self, x):
+                self.x = x
+
+        class Derived(Base):
+            __slots__ = ['y', 'z']
+
+            def __init__(self, x, y):
+                super().__init__(x)
+                self.y = y
+
+        obj1 = Derived(1, 2)
+        obj2 = Derived(1, 2)
+        obj3 = Derived(3, 4)
+
+        # Same initialized values should show no difference
+        diff1 = DeepDiff(obj1, obj2)
+        assert diff1 == {}
+
+        # Different values should show difference
+        diff2 = DeepDiff(obj1, obj3)
+        assert diff2 == {
+            'values_changed': {
+                'root.x': {'new_value': 3, 'old_value': 1},
+                'root.y': {'new_value': 4, 'old_value': 2},
+            }
+        }
+
 class TestDeepHashPrep:
     """DeepHashPrep Tests covering object serialization."""
 
