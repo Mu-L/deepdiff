@@ -250,14 +250,39 @@ class TestDeepHashPrep:
         }
         assert DeepHashPrep(item1)[item1] == DeepHashPrep(item2)[item2]
 
-    def test_prep_str(self):
+    def test_prep_str1(self):
         obj = "a"
+        obj2 = b"a"
         expected_result = {obj: prep_str(obj)}
         result = DeepHashPrep(obj, ignore_string_type_changes=True)
         assert expected_result == result
-        expected_result = {obj: prep_str(obj, ignore_string_type_changes=False)}
+        assert result[obj] == 'a'
+        expected_result2 = {obj: prep_str(obj, ignore_string_type_changes=False)}
         result = DeepHashPrep(obj, ignore_string_type_changes=False)
-        assert expected_result == result
+        assert expected_result2 == result
+        assert result[obj] == 'str:a'
+
+        expected_result3 = {obj2: prep_str(obj2, ignore_string_type_changes=True)}
+        result = DeepHashPrep(obj2, ignore_string_type_changes=True)
+        assert expected_result3 != result
+        assert result[obj2] == 'a'
+        result = DeepHashPrep(obj2, ignore_string_type_changes=False)
+        assert {b'a': 'bytes:a'} == result
+        assert result[obj2] == 'bytes:a'
+
+    def test_prep_number1(self):
+        obj_int = 1
+        obj_float = 1.0
+        # By default, type is included in the prep
+        result_int = DeepHashPrep(obj_int)
+        result_float = DeepHashPrep(obj_float)
+        assert result_int[obj_int] == 'int:1'
+        assert result_float[obj_float] == 'float:1.0'
+        # When ignoring numeric type changes, both get the same "number:" prefix
+        result_int2 = DeepHashPrep(obj_int, ignore_numeric_type_changes=True)
+        result_float2 = DeepHashPrep(obj_float, ignore_numeric_type_changes=True)
+        assert result_int2[obj_int] == result_float2[obj_float]
+        assert result_int2[obj_int] == 'number:1.000000000000'
 
     def test_dictionary_key_type_change(self):
         obj1 = {"b": 10}
