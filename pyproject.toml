@@ -6,7 +6,7 @@ build-backend = "flit_core.buildapi"
 name = "deepdiff"
 version = "8.7.0"
 dependencies = [
-  "orderly-set>=5.4.1,<6",
+  "orderly-set>=5.5.0,<6",
 ]
 requires-python = ">=3.10"
 authors = [
@@ -36,7 +36,7 @@ classifiers = [
 # `dependency-groups` would make this a lot cleaner, in theory.
 [project.optional-dependencies]
 coverage = [
-  "coverage~=7.13.4",
+  "coverage~=7.13.5",
 ]
 cli = [
   "click~=8.3.1",
@@ -54,26 +54,25 @@ dev = [
   "tomli-w~=1.2.0",
   "pandas~=3.0.1; python_version >= '3.11'",
   "pandas~=2.2.0; python_version < '3.11'",
-  "polars~=1.38.1",
+  "polars~=1.39.3",
   "nox==2026.2.9",
   "uuid6==2025.0.1",
   "pytz",
 ]
 docs = [
-  # We use the html style that is not supported in Sphinx 7 anymore.
-  "Sphinx~=6.2.0",
-  "sphinx-sitemap~=2.6.0",
-  "sphinxemoji~=0.3.0"
+  "Sphinx~=8.1.3",
+  "sphinx-sitemap~=2.9.0",
+  "sphinxemoji~=0.3.2"
 ]
 static = [
-  "flake8~=7.1.0",
-  "flake8-pyproject~=1.2.3",
+  "flake8~=7.3.0",
+  "flake8-pyproject~=1.2.4",
   "pydantic~=2.12.5",
 ]
 test = [
   "pytest~=9.0.2",
   "pytest-benchmark~=5.2.3",
-  "pytest-cov~=7.0.0",
+  "pytest-cov~=7.1.0",
   "python-dotenv~=1.2.2",
 ]
 optimize = [
