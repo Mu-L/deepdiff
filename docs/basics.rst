@@ -89,8 +89,8 @@ String difference 2
 
     >>>
     >>> print (ddiff['values_changed']["root[4]['b']"]["diff"])
-    --- 
-    +++ 
+    ---
+    +++
     @@ -1,5 +1,4 @@
     -world!
     -Goodbye!
@@ -172,7 +172,7 @@ Datetime
 Group By
 --------
 
-group_by can be used when dealing with the list of dictionaries. It converts them from lists to a single dictionary with the key defined by group_by. The common use case is when reading data from a flat CSV, and the primary key is one of the columns in the CSV. We want to use the primary key instead of the CSV row number to group the rows. The group_by can do 2D group_by by passing a list of 2 keys.
+group_by can be used when dealing with the list of dictionaries. It converts them from lists to a single dictionary with the key defined by group_by. The common use case is when reading data from a flat CSV, and the primary key is one of the columns in the CSV. We want to use the primary key instead of the CSV row number to group the rows. The group_by can do 2D group_by by passing a list of 2 keys. It is also possible to have a callable group_by, which can be used to access keys in more nested data structures.
 
 For example:
     >>> [
@@ -249,6 +249,28 @@ Now we use group_by='id':
      'values_changed': {"root['BB']['James']['last_name']": {'new_value': 'Brown',
                                                              'old_value': 'Blue'}}}
 
+Callable group_by Example:
+    >>> from deepdiff import DeepDiff
+    >>>
+    >>> t1 = [
+    ...     {'id': 'AA', 'demographics': {'names': {'first': 'Joe', 'middle': 'John', 'last': 'Nobody'}}},
+    ...     {'id': 'BB', 'demographics': {'names': {'first': 'James', 'middle': 'Joyce', 'last': 'Blue'}}},
+    ...     {'id': 'CC', 'demographics': {'names': {'first': 'Mike', 'middle': 'Mark', 'last': 'Apple'}}},
+    ... ]
+    >>>
+    >>> t2 = [
+    ...     {'id': 'AA', 'demographics': {'names': {'first': 'Joe', 'middle': 'John', 'last': 'Nobody'}}},
+    ...     {'id': 'BB', 'demographics': {'names': {'first': 'James', 'middle': 'Joyce', 'last': 'Brown'}}},
+    ...     {'id': 'CC', 'demographics': {'names': {'first': 'Mike', 'middle': 'Charles', 'last': 'Apple'}}},
+    ... ]
+    >>>
+    >>> diff = DeepDiff(t1, t2, group_by=lambda x: x['demographics']['names']['first'])
+    >>> pprint(diff)
+    {'values_changed': {"root['James']['demographics']['names']['last']": {'new_value': 'Brown',
+                                                                           'old_value': 'Blue'},
+                        "root['Mike']['demographics']['names']['middle']": {'new_value': 'Charles',
+                                                                            'old_value': 'Mark'}}}
+
 .. _group_by_sort_key_label:
 
 Group By - Sort Key
@@ -256,7 +278,7 @@ Group By - Sort Key
 
 group_by_sort_key is used to define how dictionaries are sorted if multiple ones fall under one group. When this parameter is used, group_by converts the lists of dictionaries into a dictionary of keys to lists of dictionaries. Then, group_by_sort_key is used to sort between the list.
 
-For example, there are duplicate id values. If we only use group_by='id', one of the dictionaries with id of 'BB' will overwrite the other. However, if we also set group_by_sort_key='name', we keep both dictionaries with the id of 'BB'. 
+For example, there are duplicate id values. If we only use group_by='id', one of the dictionaries with id of 'BB' will overwrite the other. However, if we also set group_by_sort_key='name', we keep both dictionaries with the id of 'BB'.
 
 Example:
     >>> [{'id': 'AA', 'int_id': 2, 'last_name': 'Nobody', 'name': 'Joe'},

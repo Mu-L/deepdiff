@@ -157,7 +157,7 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                  exclude_regex_paths: Union[str, List[str], Pattern[str], List[Pattern[str]], None]=None,
                  exclude_types: Optional[List[type]]=None,
                  get_deep_distance: bool=False,
-                 group_by: Union[str, Tuple[str, str], None]=None,
+                 group_by: Union[str, Tuple[str, str], Callable, None]=None,
                  group_by_sort_key: Union[str, Callable, None]=None,
                  hasher: Optional[Callable]=None,
                  hashes: Optional[Dict[Any, Any]]=None,
@@ -943,7 +943,7 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         t2_from_index=None, t2_to_index=None,
     ):
         for (i, j), (x, y) in self._get_matching_pairs(
-            level, 
+            level,
             t1_from_index=t1_from_index, t1_to_index=t1_to_index,
             t2_from_index=t2_from_index, t2_to_index=t2_to_index
         ):
@@ -1835,7 +1835,32 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
 
     @staticmethod
     def _get_key_for_group_by(row, group_by, item_name):
+        """
+        Get the key value to group a row by, using the specified group_by parameter.
+
+        Example
+            >>> row = {'first': 'John', 'middle': 'Joe', 'last': 'Smith'}
+            >>> DeepDiff._get_key_for_group_by(row, 'first', 't1')
+            'John'
+            >>> nested_row = {'id': 123, 'demographics': {'names': {'first': 'John', 'middle': 'Joe', 'last': 'Smith'}}}
+            >>> group_by = lambda x: x['demographics']['names']['first']
+            >>> DeepDiff._get_key_for_group_by(nested_row, group_by, 't1')
+            'John'
+
+        Args:
+            row (dict): The dictionary (row) to extract the group by key from.
+            group_by (str or callable): The key name or function to call to get to the key value to group by.
+            item_name (str): The name of the item, used for error messages.
+
+        Returns:
+            str: The key value to group by.
+
+        Raises:
+            KeyError: If the specified key is not found in the row.
+        """
         try:
+            if callable(group_by):
+                return group_by(row)
             return row.pop(group_by)
         except KeyError:
             logger.error("Unable to group {} by {}. The key is missing in {}".format(item_name, group_by, row))
@@ -1915,13 +1940,13 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         Whether a value was changed or they were added or removed.
 
         Example
+            >>> from pprint import pprint
             >>> t1 = {1: 1, 2: 2, 3: [3], 4: 4}
             >>> t2 = {1: 1, 2: 4, 3: [3, 4], 5: 5, 6: 6}
             >>> ddiff = DeepDiff(t1, t2)
-            >>> ddiff
             >>> pprint(ddiff, indent=4)
-            {   'dictionary_item_added': [root[5], root[6]],
-                'dictionary_item_removed': [root[4]],
+            {   'dictionary_item_added': ['root[5]', 'root[6]'],
+                'dictionary_item_removed': ['root[4]'],
                 'iterable_item_added': {'root[3][1]': 4},
                 'values_changed': {'root[2]': {'new_value': 4, 'old_value': 2}}}
             >>> ddiff.affected_paths
@@ -1947,13 +1972,13 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         Whether a value was changed or they were added or removed.
 
         Example
+            >>> from pprint import pprint
             >>> t1 = {1: 1, 2: 2, 3: [3], 4: 4}
             >>> t2 = {1: 1, 2: 4, 3: [3, 4], 5: 5, 6: 6}
             >>> ddiff = DeepDiff(t1, t2)
-            >>> ddiff
             >>> pprint(ddiff, indent=4)
-            {   'dictionary_item_added': [root[5], root[6]],
-                'dictionary_item_removed': [root[4]],
+            {   'dictionary_item_added': ['root[5]', 'root[6]'],
+                'dictionary_item_removed': ['root[4]'],
                 'iterable_item_added': {'root[3][1]': 4},
                 'values_changed': {'root[2]': {'new_value': 4, 'old_value': 2}}}
             >>> ddiff.affected_paths
