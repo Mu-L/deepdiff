@@ -11,6 +11,7 @@ import datetime  # NOQA
 import decimal  # NOQA
 import orderly_set  # NOQA
 import collections  # NOQA
+import fractions
 import ipaddress
 import base64
 from copy import deepcopy, copy
@@ -79,6 +80,7 @@ SAFE_TO_IMPORT = frozenset({
     'datetime.time',
     'datetime.timedelta',
     'decimal.Decimal',
+    'fractions.Fraction',
     'uuid.UUID',
     'orderly_set.sets.OrderedSet',
     'orderly_set.sets.OrderlySet',
@@ -635,6 +637,13 @@ def _serialize_decimal(value):
         return float(value)
 
 
+def _serialize_fraction(value):
+    if value.denominator == 1:
+        return value.numerator
+    else:
+        return float(value)
+
+
 def _serialize_tuple(value):
     if hasattr(value, '_asdict'):  # namedtuple
         return value._asdict()
@@ -655,6 +664,7 @@ def _serialize_bytes(value):
 
 JSON_CONVERTOR = {
     decimal.Decimal: _serialize_decimal,
+    fractions.Fraction: _serialize_fraction,
     SetOrdered: list,
     orderly_set.StableSetEq: list,
     set: list,
