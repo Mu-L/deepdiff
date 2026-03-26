@@ -13,6 +13,7 @@ from typing import NamedTuple, Any, List, Optional, Dict, Union, TYPE_CHECKING, 
 from collections.abc import Mapping, Sequence, Generator
 from ast import literal_eval
 from decimal import Decimal, localcontext, InvalidOperation as InvalidDecimalOperation
+from fractions import Fraction
 from itertools import repeat
 from orderly_set import StableSetEq as SetOrderedBase  # median: 1.0867 s for cache test, 5.63s for all tests
 from threading import Timer
@@ -187,14 +188,14 @@ strings: Tuple[Type[str], Type[bytes], Type[memoryview]] = (str, bytes, memoryvi
 unicode_type = str
 bytes_type = bytes
 only_complex_number: Tuple[Type[Any], ...] = (complex,) + numpy_complex_numbers
-only_numbers: Tuple[Type[Any], ...] = (int, float, complex, Decimal) + numpy_numbers
+only_numbers: Tuple[Type[Any], ...] = (int, float, complex, Decimal, Fraction) + numpy_numbers
 datetimes: Tuple[Type[Any], ...] = (datetime.datetime, datetime.date, datetime.timedelta, datetime.time, np_datetime64)
 ipranges: Tuple[Type[Any], ...] = (ipaddress.IPv4Interface, ipaddress.IPv6Interface, ipaddress.IPv4Network, ipaddress.IPv6Network, ipaddress.IPv4Address, ipaddress.IPv6Address)
 uuids: Tuple[Type[uuid.UUID]] = (uuid.UUID, )
 times: Tuple[Type[Any], ...] = (datetime.datetime, datetime.time, np_datetime64)
 numbers: Tuple[Type[Any], ...] = only_numbers + datetimes
 # Type alias for use in type annotations
-NumberType = Union[int, float, complex, Decimal, datetime.datetime, datetime.date, datetime.timedelta, datetime.time, Any]
+NumberType = Union[int, float, complex, Decimal, Fraction, datetime.datetime, datetime.date, datetime.timedelta, datetime.time, Any]
 booleans: Tuple[Type[bool], Type[Any]] = (bool, np_bool_)
 
 basic_types: Tuple[Type[Any], ...] = strings + numbers + uuids + booleans + (type(None), )
