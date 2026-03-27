@@ -349,7 +349,7 @@ class DeepHash(Base):
         """
         Get method for the hashes dictionary.
         It can extract the hash for a given key that is already calculated when extract_index=0
-        or the count of items that went to building the object whenextract_index=1.
+        or the count of items that went to building the object when extract_index=1.
         """
         return self.get_key(self.hashes, key, default=default, extract_index=extract_index,
                             ignore_numeric_type_changes=self.ignore_numeric_type_changes)
@@ -360,7 +360,7 @@ class DeepHash(Base):
         """
         get_key method for the hashes dictionary.
         It can extract the hash for a given key that is already calculated when extract_index=0
-        or the count of items that went to building the object whenextract_index=1.
+        or the count of items that went to building the object when extract_index=1.
         """
         try:
             result = DeepHash._getitem(hashes, key, extract_index=extract_index,

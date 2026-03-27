@@ -25,7 +25,7 @@ Comparing bytes that have non UTF-8 encoding:
         raise UnicodeDecodeError(
     UnicodeDecodeError: 'utf-8' codec can't decode byte 0xbc in position 0: Can not produce a hash for root: invalid start byte in 'p of flo...'. Please either pass ignore_encoding_errors=True or pass the encoding via encodings=['utf-8', '...'].
 
-Let's try to pass both 'utf-8' and 'latin-1' as encodings to be tries:
+Let's try to pass both 'utf-8' and 'latin-1' as encodings to be tried:
     >>> DeepDiff([b'foo'], [item], encodings=['utf-8', 'latin-1'], ignore_order=True)
     {'values_changed': {'root[0]': {'new_value': b'\xbc cup of flour', 'old_value': b'foo'}}}
 

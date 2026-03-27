@@ -496,10 +496,10 @@ def cartesian_product(a: Iterable[Tuple[Any, ...]], b: Iterable[Any]) -> Iterato
 
 def cartesian_product_of_shape(dimentions: Iterable[int], result: Optional[Tuple[Tuple[Any, ...], ...]] = None) -> Iterator[Tuple[Any, ...]]:
     """
-    Cartesian product of a dimentions iterable.
+    Cartesian product of a dimensions iterable.
     This is mainly used to traverse Numpy ndarrays.
 
-    Each array has dimentions that are defines in ndarray.shape
+    Each array has dimensions that are defined in ndarray.shape
     """
     if result is None:
         result = ((),)  # a tuple with an empty tuple

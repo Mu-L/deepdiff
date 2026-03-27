@@ -102,7 +102,7 @@ With a cache size of 500, we set the :ref:`cache_tuning_sample_size_label` to be
 
     {'PASSES COUNT': 3960, 'DIFF COUNT': 19469, 'DISTANCE CACHE HIT COUNT': 11847, 'MAX PASS LIMIT REACHED': False, 'MAX DIFF LIMIT REACHED': False, 'DURATION SEC': 2}
 
-As you can see in this case none of the stats have not changed compared to the previous stats.
+As you can see in this case none of the stats have changed compared to the previous stats.
 
 .. figure:: _static/benchmark_deeply_nested_a__3.8__ignore_order=True__cache_size=500__cache_tuning_sample_size=500__cutoff_intersection_for_pairs=1.png
    :alt: cache_size=500 cache_tuning_sample_size=500
@@ -221,7 +221,7 @@ And then we run it in Pypy3.6-7.3.0. It takes 12 seconds now but around 110Mb of
    Nested blob of text diffed in Pypy3.6-7.3.0
 
 .. note::
-    Note that if you diffing numbers, and have Numpy installed as recommended, cPython will have a better performance than Pypy. But if you are diffing blobs of mixed strings and some numbers, Pypy will have a better CPU performance and worse memory usage.
+    Note that if you are diffing numbers, and have Numpy installed as recommended, cPython will have a better performance than Pypy. But if you are diffing blobs of mixed strings and some numbers, Pypy will have a better CPU performance and worse memory usage.
 
 
 Cutoff Intersection For Pairs

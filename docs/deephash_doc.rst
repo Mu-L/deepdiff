@@ -9,7 +9,7 @@ The main usage of DeepHash is to calculate the hash of otherwise unhashable obje
 For example you can use DeepHash to calculate the hash of a set or a dictionary!
 
 At the core of it, DeepHash is a deterministic serialization of your object into a string so it
-can be passed to a hash function. By default it uses SHA256. You have the option to pass any another hashing function to be used instead.
+can be passed to a hash function. By default it uses SHA256. You have the option to pass any other hashing function to be used instead.
 
 **Import**
     >>> from deepdiff import DeepHash
@@ -31,15 +31,15 @@ exclude_types: list, default = None
 
 
 exclude_paths: list, default = None
-    List of paths to exclude from the report. If only one item, you can path it as a string instead of a list containing only one path.
+    List of paths to exclude from the report. If only one item, you can pass it as a string instead of a list containing only one path.
 
 
 include_paths: list, default = None
-    List of the only paths to include in the report. If only one item, you can path it as a string.
+    List of the only paths to include in the report. If only one item, you can pass it as a string.
 
 
 exclude_regex_paths: list, default = None
-    List of string regex paths or compiled regex paths objects to exclude from the report. If only one item, you can path it as a string instead of a list containing only one regex path.
+    List of string regex paths or compiled regex paths objects to exclude from the report. If only one item, you can pass it as a string instead of a list containing only one regex path.
 
 
 exclude_obj_callback

@@ -178,7 +178,7 @@ Define A Custom Operator
 ------------------------
 
 
-To define an custom operator, you just need to inherit *BaseOperator* or *BaseOperatorPlus*.
+To define a custom operator, you just need to inherit *BaseOperator* or *BaseOperatorPlus*.
 
     - *BaseOperatorPlus* is our new base operator that can be subclassed and provides the structure to build any custom operator.
     - *BaseOperator* is our older base class for creating custom operators. It was designed mainly for simple string based regex comparison.

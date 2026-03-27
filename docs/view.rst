@@ -328,7 +328,7 @@ The ``diff`` given will be the ``DeepDiff`` that ``pretty`` was called on; this 
     Diff #3: Item root[1] removed from set.
 
 
-Text view vs. Tree view vs. vs. pretty() method
+Text view vs. Tree view vs. pretty() method
 -----------------------------------------------
 
 Views are just different format of results. Each comes with its own set of features. At the end of the day the user can choose the right format based on the use case.

@@ -45,7 +45,7 @@ class DistanceMixin:
         Gives a numeric value for the distance of t1 and t2 based on how many operations are needed to convert
         one to the other.
 
-        This is a similar concept to the Levenshtein Edit Distance but for the structured data and is it is designed
+        This is a similar concept to the Levenshtein Edit Distance but for the structured data and it is designed
         to be between 0 and 1.
 
         A distance of zero means the objects are equal and a distance of 1 is very far.

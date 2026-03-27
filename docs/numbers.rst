@@ -28,7 +28,7 @@ If ignore_numeric_type_changes is set to True and you have left significant_digi
     For Decimals, Python's format rounds 2.5 to 2 and 3.5 to 4 (to the closest even number)
 
 .. note::
-    To override what significant digits mean and switch it to scientific notation, use number_format_notation="e
+    To override what significant digits mean and switch it to scientific notation, use number_format_notation="e"
     Behind the scene that switches DeepDiff to use "{:.Xe}".format(Your Number) where X=significant_digits.
 
 **Examples:**

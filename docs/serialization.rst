@@ -227,7 +227,7 @@ Delta Serialize To Flat Dictionaries
 
 Sometimes, it is desired to serialize a :ref:`delta_label` object to a list of flat dictionaries. For example, to store them in relation databases. In that case, you can use the Delta.to_flat_dicts to achieve the desired outcome.
 
-Since None is a valid value, we use a special hard-coded string to signify "unkown": 'unknown___'
+Since None is a valid value, we use a special hard-coded string to signify "unknown": 'unknown___'
 
 .. note::
     Many new keys are added to the flat dicts in DeepDiff 7.0.0

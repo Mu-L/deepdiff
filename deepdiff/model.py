@@ -919,7 +919,7 @@ class ChildRelationship:
                         Will return '(unrepresentable)' instead of None if there is no string representation
 
         TODO: stringify_param has issues with params that when converted to string via repr,
-        it is not straight forward to turn them back into the original object.
+        it is not straightforward to turn them back into the original object.
         Although repr is meant to be able to reconstruct the original object but for complex objects, repr
         often does not recreate the original object.
         Perhaps we should log that the repr reconstruction failed so the user is aware.

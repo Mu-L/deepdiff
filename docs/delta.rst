@@ -202,7 +202,7 @@ Delta Deserializer
 
 DeepDiff by default uses a restricted Python pickle function to deserialize the Delta dumps. Read more about :ref:`delta_dump_safety_label`.
 
-The user of Delta can decide to switch the serializer and deserializer to their custom ones. The serializer and deserializer parameters can be used exactly for that reason. The best way to come up with your own serializer and deserialier is to take a look at the `pickle_dump and pickle_load functions in the serializer module <https://github.com/seperman/deepdiff/serialization.py>`_
+The user of Delta can decide to switch the serializer and deserializer to their custom ones. The serializer and deserializer parameters can be used exactly for that reason. The best way to come up with your own serializer and deserializer is to take a look at the `pickle_dump and pickle_load functions in the serializer module <https://github.com/seperman/deepdiff/serialization.py>`_
 
 .. _delta_json_deserializer_label:
 

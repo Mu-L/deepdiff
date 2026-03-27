@@ -238,7 +238,7 @@ Imagine if we have the following files:
    :header-rows: 1
 
 .. csv-table:: t2.csv
-   :file: ../tests/fixtures/t1.csv
+   :file: ../tests/fixtures/t2.csv
    :header-rows: 1
 
 

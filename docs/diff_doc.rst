@@ -131,7 +131,7 @@ ignore_uuid_types: Boolean, default = False
 
 ignore_string_case: Boolean, default = False
     :ref:`ignore_string_case_label`
-    Whether to be case-sensitive or not when comparing strings. By settings ignore_string_case=False, strings will be compared case-insensitively.
+    Whether to be case-sensitive or not when comparing strings. By setting ignore_string_case=True, strings will be compared case-insensitively.
 
 ignore_nan_inequality: Boolean, default = False
     :ref:`ignore_nan_inequality_label`

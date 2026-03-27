@@ -21,7 +21,7 @@ Also for root keys you don't have to pass as "root['key']". You can instead just
 Example
     >>> t1 = {"for life": "vegan", "ingredients": ["no meat", "no eggs", "no dairy"]}
     >>> t2 = {"for life": "vegan", "ingredients": ["veggies", "tofu", "soy sauce"]}
-    >>> print (DeepDiff(t1, t2, exclude_paths="ingredients))  # one item pass it as a string
+    >>> print (DeepDiff(t1, t2, exclude_paths="ingredients"))  # one item pass it as a string
     {}
     >>> print (DeepDiff(t1, t2, exclude_paths=["ingredients", "ingredients2"]))  # multiple items pass as a list or a set.
     {}

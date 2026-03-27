@@ -36,7 +36,7 @@
     - Added support for memoryview serialization
     - Added support for bytes serialization (non-UTF8 compatible)
     - Fixed bug where group_by with numbers would leak type info into group path reports
-    - Fixed bug in `_get_clean_to_keys_mapping without` explicit significant digits
+    - Fixed bug in `_get_clean_to_keys_mapping` without explicit significant digits
     - Added support for python dict key serialization
     - Enhanced support for IP address serialization with safe module imports
     - Added development tooling improvements (pyright config, .envrc example)
@@ -45,7 +45,7 @@
 - v8-5-0
     - Updating deprecated pydantic calls
     - Switching to pyproject.toml
-    - Fix for moving nested tables when using iterable_compare_func.  by 
+    - Fix for moving nested tables when using iterable_compare_func.
     - Fix recursion depth limit when hashing numpy.datetime64
     - Moving from legacy setuptools use to pyproject.toml
 
@@ -231,7 +231,7 @@
 - v1-0-2: Checking for ImmutableMapping type instead of dict
 - v1-0-1: Better ignore order support
 - v1-0-0: Restructuring output to make it more useful. This is NOT backward compatible.
-- v0-6-1: Fixiing iterables with unhashable when order is ignored
+- v0-6-1: Fixing iterables with unhashable when order is ignored
 - v0-6-0: Adding unicode support
 - v0-5-9: Adding decimal support
 - v0-5-8: Adding ignore order of unhashables support

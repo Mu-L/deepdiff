@@ -77,7 +77,7 @@ Example
     >>> DeepDiff(t1, t2, ignore_numeric_type_changes=True)
     {}
 
-Note that this parameter only works for comparing numbers with numbers. If you compare a number to a string value of the number, this parameter does not solver your problem:
+Note that this parameter only works for comparing numbers with numbers. If you compare a number to a string value of the number, this parameter does not solve your problem:
 
 Example:
     >>> t1 = Decimal('10.01')
@@ -382,7 +382,7 @@ include_obj_callback_strict: function, default = None
     ...         return True if isinstance(obj, int) and obj > 10 else False
     ...
     >>> t1 = {"x": 10, "y": "b", "z": "c"}
-    >>> t1 = {"x": 12, "y": "b", "z": "c"}
+    >>> t2 = {"x": 12, "y": "b", "z": "c"}
     >>> DeepDiff(t1, t2, include_obj_callback=include_obj_callback_strict)
     {'values_changed': {"root['x']": {'new_value': 12, 'old_value': 10}}}
     >>> DeepDiff(t1, t2, include_obj_callback_strict=include_obj_callback_strict)
