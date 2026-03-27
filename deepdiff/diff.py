@@ -1950,10 +1950,10 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 'dictionary_item_removed': ['root[4]'],
                 'iterable_item_added': {'root[3][1]': 4},
                 'values_changed': {'root[2]': {'new_value': 4, 'old_value': 2}}}
-            >>> ddiff.affected_paths
-            SetOrdered(['root[3][1]', 'root[4]', 'root[5]', 'root[6]', 'root[2]'])
-            >>> ddiff.affected_root_keys
-            SetOrdered([3, 4, 5, 6, 2])
+            >>> sorted(ddiff.affected_paths)
+            ['root[2]', 'root[3][1]', 'root[4]', 'root[5]', 'root[6]']
+            >>> sorted(ddiff.affected_root_keys)
+            [2, 3, 4, 5, 6]
 
         """
         result = SetOrdered()
@@ -1982,10 +1982,10 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 'dictionary_item_removed': ['root[4]'],
                 'iterable_item_added': {'root[3][1]': 4},
                 'values_changed': {'root[2]': {'new_value': 4, 'old_value': 2}}}
-            >>> ddiff.affected_paths
-            SetOrdered(['root[3][1]', 'root[4]', 'root[5]', 'root[6]', 'root[2]'])
-            >>> ddiff.affected_root_keys
-            SetOrdered([3, 4, 5, 6, 2])
+            >>> sorted(ddiff.affected_paths)
+            ['root[2]', 'root[3][1]', 'root[4]', 'root[5]', 'root[6]']
+            >>> sorted(ddiff.affected_root_keys)
+            [2, 3, 4, 5, 6]
         """
         result = SetOrdered()
         for key in REPORT_KEYS:

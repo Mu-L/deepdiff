@@ -69,7 +69,7 @@ class DeepSearch(Dict[str, Union[Dict[str, Any], SetOrdered, List[str]]]):
         >>> item = "somewhere"
         >>> ds = DeepSearch(obj, item, verbose_level=2)
         >>> print(ds)
-        {'matched_values': {'root[3]': 'somewhere great!', 'root[0]': 'long somewhere'}}
+        {'matched_values': {'root[0]': 'long somewhere', 'root[3]': 'somewhere great!'}}
 
     Search in nested data for string
         >>> obj = ["something somewhere", {"long": "somewhere", "string": 2, 0: 0, "somewhere": "around"}]

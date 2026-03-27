@@ -42,7 +42,7 @@ Search in list for string
     >>> item = "somewhere"
     >>> ds = obj | grep(item)
     >>> print(ds)
-    {'matched_values': {'root[3]', 'root[0]'}
+    {'matched_values': ['root[0]', 'root[3]']}
 
 Search in nested data for string
     >>> obj = ["something somewhere", {"long": "somewhere", "string": 2, 0: 0, "somewhere": "around"}]
@@ -56,6 +56,7 @@ Search in nested data for string
 You can also use regular expressions
     >>> obj = ["something here", {"long": "somewhere", "someone": 2, 0: 0, "somewhere": "around"}]
     >>> ds = obj | grep("some.*", use_regexp=True)
+    >>> pprint(ds, indent=2)
     { 'matched_paths': ["root[1]['someone']", "root[1]['somewhere']"],
       'matched_values': ['root[0]', "root[1]['long']"]}
 

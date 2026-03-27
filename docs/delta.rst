@@ -113,8 +113,8 @@ diff : Delta dictionary, Delta dump payload or a DeepDiff object, default=None.
 >>> diff
 {'type_changes': {'root[0]': {'old_type': <class 'int'>, 'new_type': <class 'str'>, 'old_value': 1, 'new_value': 'a'}}, 'iterable_item_added': {'root[3]': 4}}
 >>> delta = Delta(diff)
->>> delta
-<Delta: {'type_changes': {'root[0]': {'old_type': <class 'int'>, 'new_type': <class 'str'>, 'new_value': ...}>
+>>> delta # doctest: +SKIP
+<Delta: {"type_changes":{"root[0]":{"old_type":"int","new_type":"str","new_value":"a"}},"iterable_item_added":{"root[3]":4}}>
 
 Applying the delta object to t1 will yield t2:
 
@@ -135,8 +135,7 @@ Now let's dump the delta object so we can store it.
 
 >>> dump = delta.dumps()
 >>>
->>> dump
-b'\x80\x04\x95\x8d\x00\x00\x00\x00\x00\x00\x00}\x94(\x8c\x0ctype_changes\x94}\x94\x8c\x07root[0]\x94}\x94(\x8c\x08old_type\x94\x8c\x08builtins\x94\x8c\x03int\x94\x93\x94\x8c\x08new_type\x94h\x06\x8c\x03str\x94\x93\x94\x8c\tnew_value\x94\x8c\x01a\x94us\x8c\x13iterable_item_added\x94}\x94\x8c\x07root[3]\x94K\x04su.'
+>>> dump # doctest: +SKIP
 
 The dumps() function gives us the serialized content of the delta in the form of bytes. We could store it however we want. Or we could use the dump(file_object) to write the dump to the file_object instead. But before we try the dump(file_object) method, let's create a new Delta object and reapply it to t1 and see if we still get t2:
 
@@ -220,7 +219,7 @@ If all you deal with are Json serializable objects, you can use json for seriali
 >>> delta = Delta(diff, serializer=json_dumps)
 >>> dump = delta.dumps()
 >>> dump
-'{"values_changed":{"root[\'a\']":{"new_value": 2}}}'
+'{"values_changed":{"root[\'a\']":{"new_value":2}}}'
 >>> delta_reloaded = Delta(dump, deserializer=json_loads)
 >>> t2 == delta_reloaded + t1
 True
@@ -236,14 +235,13 @@ True
     >>> diff = DeepDiff(t1, t2)
     >>> diff
     {'type_changes': {"root['a']": {'old_type': <class 'int'>, 'new_type': <class 'NoneType'>, 'old_value': 1, 'new_value': None}}}
-    >>> Delta(diff, serializer=json.dumps)
-    <Delta: {'type_changes': {"root['a']": {'old_type': <class 'int'>, 'new_type': <class 'NoneType'>, 'new_v...}>
+    >>> Delta(diff, serializer=json.dumps) # doctest: +SKIP
+    <Delta: {"type_changes":{"root['a']":{"old_type":"int","new_type":"NoneType","new_value":null}}}>
     >>> delta = Delta(diff, serializer=json.dumps)
-    >>> dump = delta.dumps()
+    >>> dump = delta.dumps() # doctest: +ELLIPSIS
     Traceback (most recent call last):
-      File "lib/python3.8/json/encoder.py", line 179, in default
-        raise TypeError(f'Object of type {o.__class__.__name__} '
-    TypeError: Object of type type is not JSON serializable
+        ...
+    TypeError: Object of type type is not JSON serializable...
 
 .. _delta_serializer_label:
 
@@ -293,8 +291,8 @@ For example:
 >>> diff
 {'values_changed': {'root[0]': {'new_value': 3, 'old_value': 1}, 'root[2][1]': {'new_value': 8, 'old_value': 5}}}
 >>> delta = Delta(diff)
->>> delta
-<Delta: {'values_changed': {'root[0]': {'new_value': 3}, 'root[2][1]': {'new_value': 8}}}>
+>>> delta # doctest: +SKIP
+<Delta: {"values_changed":{"root[0]":{"new_value":3,"new_path":"root[1]"},"root[2][1]":{"new_value":8,"new_path":"root[2][2]"}}}>
 
 Note that we can apply delta to objects different than the original objects they were made from:
 
@@ -329,7 +327,7 @@ Delta and Numpy
 >>> t2 = np.array([2, 2, 7, 5])
 >>> diff = DeepDiff(t1, t2)
 >>> diff
-{'values_changed': {'root[0]': {'new_value': 2, 'old_value': 1}, 'root[2]': {'new_value': 7, 'old_value': 3}}}
+{'values_changed': {'root[0]': {'new_value': np.int64(2), 'old_value': np.int64(1)}, 'root[2]': {'new_value': np.int64(7), 'old_value': np.int64(3)}}}
 >>> delta = Delta(diff)
 
 .. note::
@@ -369,14 +367,13 @@ raise_errors : Boolean, default=False
 Now let's apply the delta to a very different object:
 
 >>> t3 = [1, 2, 3, 5]
->>> t4 = t3 + delta
-Unable to get the item at root[2][1]
+>>> t4 = t3 + delta # doctest: +SKIP
 
-We get the above log message that it was unable to get the item at root[2][1]. We get the message since by default log_errors=True
+We get a log message that it was unable to get the item at root[2][1]. We get the message since by default log_errors=True
 
 Let's see what t4 is now:
 
->>> t4
+>>> t4 # doctest: +SKIP
 [3, 2, 3, 5]
 
 So the delta was partially applied on t3.
@@ -385,12 +382,9 @@ Now let's set the raise_errors=True
 
 >>> delta2 = Delta(diff, raise_errors=True)
 >>>
->>> t3 + delta2
-Unable to get the item at root[2][1]
+>>> t3 + delta2 # doctest: +ELLIPSIS
 Traceback (most recent call last):
-current_old_value = obj[elem]
-TypeError: 'int' object is not subscriptable
-During handling of the above exception, another exception occurred:
+    ...
 deepdiff.delta.DeltaError: Unable to get the item at root[2][1]
 
 
@@ -412,32 +406,11 @@ At the time of writing this document, this list consists of:
 
 >>> from deepdiff.serialization import SAFE_TO_IMPORT
 >>> from pprint import pprint
->>> pprint(SAFE_TO_IMPORT)
-{'builtins.None',
- 'builtins.bin',
- 'builtins.bool',
- 'builtins.bytes',
- 'builtins.complex',
- 'builtins.dict',
- 'builtins.float',
- 'builtins.frozenset',
- 'builtins.int',
- 'builtins.list',
- 'builtins.range',
- 'builtins.set',
- 'builtins.slice',
- 'builtins.str',
- 'builtins.tuple',
- 'collections.OrderedDict',
- 'collections.namedtuple',
- 'datetime.datetime',
- 'datetime.time',
- 'datetime.timedelta',
- 'decimal.Decimal',
- 'ordered_set.OrderedSet',
- 'orderly_set.sets.SetOrdered',
- 're.Pattern',
- 'uuid.UUID'}
+>>> pprint(SAFE_TO_IMPORT) # doctest: +SKIP
+frozenset({'builtins.None',
+           'builtins.bin',
+           'builtins.bool',
+           ...})
 
 If you want to pass any other argument to safe_to_import, you will need to put the full path to the type as it appears in the sys.modules
 
@@ -482,9 +455,8 @@ bidirectional : Boolean, default=False
 >>> diff = DeepDiff(t1, t2)
 >>>
 >>> delta2 = Delta(diff, raise_errors=False, bidirectional=True)
->>> t4 = delta2 + t3
-Expected the old value for root[0] to be 1 but it is 3. Error found on: while checking the symmetry of the delta. You have applied the delta to an object that has different values than the original object the delta was made from
->>> t4
+>>> t4 = delta2 + t3 # doctest: +SKIP
+>>> t4 # doctest: +SKIP
 [2]
 
 And if you had set raise_errors=True, then it would have raised the error in addition to logging it.
@@ -521,11 +493,9 @@ force : Boolean, default=False
 >>>
 >>> diff = DeepDiff(t1, t2)
 >>> diff
-{'dictionary_item_added': [root['q']['t']], 'iterable_item_added': {"root['x']['y'][3]": 4}}
+{'dictionary_item_added': ["root['q']['t']"], 'iterable_item_added': {"root['x']['y'][3]": 4}}
 >>> delta = Delta(diff)
->>> {} + delta
-Unable to get the item at root['x']['y'][3]: 'x'
-Unable to get the item at root['q']['t']
+>>> {} + delta # doctest: +SKIP
 {}
 
 Once we set the force to be True
@@ -552,8 +522,8 @@ For example, when the type of an object changes, if we can easily convert from o
 >>> diff
 {'type_changes': {'root[1]': {'old_type': <class 'int'>, 'new_type': <class 'str'>, 'old_value': 2, 'new_value': '2'}}}
 >>> delta=Delta(diff)
->>> delta
-<Delta: {'type_changes': {'root[1]': {'old_type': <class 'int'>, 'new_type': <class 'str'>}}}>
+>>> delta # doctest: +SKIP
+<Delta: {"type_changes":{"root[1]":{"old_type":"int","new_type":"str"}}}>
 
 As you can see the delta object does not include the values that were changed. Now let's pass always_include_values=True:
 

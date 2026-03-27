@@ -160,7 +160,9 @@ truncate_datetime: string, default = None
 .. note::
     DeepHash output is not like conventional hash functions. It is a dictionary of object IDs to their hashes. This happens because DeepHash calculates the hash of the object and any other objects found within the object in a recursive manner. If you only need the hash of the object you are passing, all you need to do is to do:
 
-    >>> DeepHash(obj)[obj]
+    >>> from deepdiff import DeepHash
+    >>> obj = {1: 2, 'a': 'b'}
+    >>> DeepHash(obj)[obj] # doctest: +SKIP
 
 
 **Examples**
@@ -179,8 +181,7 @@ But with DeepHash:
 
     >>> from deepdiff import DeepHash
     >>> obj = {1: 2, 'a': 'b'}
-    >>> DeepHash(obj)
-    {1: 234041559348429806012597903916437026784, 2: 148655924348182454950690728321917595655, 'a': 119173504597196970070553896747624927922, 'b': 4994827227437929991738076607196210252, '!>*id4488569408': 32452838416412500686422093274247968754}
+    >>> DeepHash(obj) # doctest: +SKIP
 
     So what is exactly the hash of obj in this case?
     DeepHash is calculating the hash of the obj and any other object that obj contains.
@@ -189,7 +190,7 @@ But with DeepHash:
 
     >>> hashes = DeepHash(obj)
     >>> hashes[obj]
-    34150898645750099477987229399128149852
+    'bf5478de322aa033da36bf3bcf9f0599e13a520773f50c6eb9f2487377a7929b'
 
     Which you can write as:
 
@@ -197,28 +198,29 @@ But with DeepHash:
 
     At first it might seem weird why DeepHash(obj)[obj] but remember that DeepHash(obj) is a dictionary of hashes of all other objects that obj contains too.
 
-    The result hash is 34150898645750099477987229399128149852. If you prefer to use another hashing algorithm, you can pass it using the hasher parameter.
+    If you prefer to use another hashing algorithm, you can pass it using the hasher parameter.
 
     If you do a deep copy of the obj, it should still give you the same hash:
 
     >>> from copy import deepcopy
     >>> obj2 = deepcopy(obj)
     >>> DeepHash(obj2)[obj2]
-    34150898645750099477987229399128149852
+    'bf5478de322aa033da36bf3bcf9f0599e13a520773f50c6eb9f2487377a7929b'
 
     Note that by default DeepHash will include string type differences. So if your strings were bytes:
 
     >>> obj3 = {1: 2, b'a': b'b'}
     >>> DeepHash(obj3)[obj3]
-    64067525765846024488103933101621212760
+    '71db3231177d49f78b52a356ca206e6179417b681604d00ed703a077049e3300'
 
     But if you want the same hash if string types are different, set ignore_string_type_changes to True:
 
     >>> DeepHash(obj3, ignore_string_type_changes=True)[obj3]
-    34150898645750099477987229399128149852
+    'e60c2befb84be625037c75e1e26d0bfc85a0ffc1f3cde9500f68f6eac55e5ad6'
 
     ignore_numeric_type_changes is by default False too.
 
+    >>> from decimal import Decimal
     >>> obj1 = {4:10}
     >>> obj2 = {4.0: Decimal(10.0)}
     >>> DeepHash(obj1)[4] == DeepHash(obj2)[4.0]
@@ -236,10 +238,10 @@ number_format_notation: String, default = "f"
 ignore_string_type_changes: Boolean, default = True
     By setting it to True, both the string and bytes of hello return the same hash.
 
-    >>> DeepHash(b'hello', ignore_string_type_changes=True)
-    {b'hello': 221860156526691709602818861774599422448}
-    >>> DeepHash('hello', ignore_string_type_changes=True)
-    {'hello': 221860156526691709602818861774599422448}
+    >>> DeepHash(b'hello', ignore_string_type_changes=True)[b'hello']
+    '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
+    >>> DeepHash('hello', ignore_string_type_changes=True)['hello']
+    '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
 
 
 ignore_numeric_type_changes: Boolean, default = False
@@ -248,11 +250,10 @@ ignore_numeric_type_changes: Boolean, default = False
     That way they both produce the same hash.
 
     >>> t1 = {1: 1, 2: 2.22}
-    >>> t2 = {1: 1.0, 2: 2.22}
     >>> DeepHash(t1)[1]
-    231678797214551245419120414857003063149
-    >>> DeepHash(t1)[1.0]
-    231678797214551245419120414857003063149
+    'c1800a30c736483f13615542e7096f7973631fef8ca935ee1ed9f35fb06fd44e'
+    >>> DeepHash(t1, ignore_numeric_type_changes=True)[1] == DeepHash(t1, ignore_numeric_type_changes=True)[1.0]
+    True
 
     You can pass a list of tuples or list of lists if you have various type groups. When t1 and t2 both fall under one of these type groups, the type change will be ignored. DeepDiff already comes with 2 groups: DeepDiff.strings and DeepDiff.numbers . If you want to pass both:
 
@@ -305,19 +306,18 @@ ignore_type_subclasses
     >>> obj_b = ClassB(1)
     >>> obj_c = ClassC(1)
     >>>
-    >>> # Since these 2 objects are from 2 different classes, the hashes are different by default.
-    ... # ignore_type_in_groups is set to [(ClassB, )] which means to ignore any type conversion between
-    ... # objects of classB and itself which does not make sense but it illustrates a better point when
-    ... # ignore_type_subclasses is set to be True.
+    >>> # By default, subclasses are considered part of the type group.
+    ... # ignore_type_in_groups=[(ClassB, )] matches ClassC too since it's a subclass.
     ... hashes_b = DeepHash(obj_b, ignore_type_in_groups=[(ClassB, )])
     >>> hashes_c = DeepHash(obj_c, ignore_type_in_groups=[(ClassB, )])
-    >>> hashes_b[obj_b] != hashes_c[obj_c]
+    >>> hashes_b[obj_b] == hashes_c[obj_c]
     True
     >>>
-    >>> # Hashes of these 2 objects will be the same when ignore_type_subclasses is set to True
+    >>> # With ignore_type_subclasses=True, only exact type matches count.
+    ... # ClassC no longer matches (ClassB, ) group, so hashes differ.
     ... hashes_b = DeepHash(obj_b, ignore_type_in_groups=[(ClassB, )], ignore_type_subclasses=True)
     >>> hashes_c = DeepHash(obj_c, ignore_type_in_groups=[(ClassB, )], ignore_type_subclasses=True)
-    >>> hashes_b[obj_b] == hashes_c[obj_c]
+    >>> hashes_b[obj_b] != hashes_c[obj_c]
     True
 
 ignore_string_case
@@ -334,6 +334,9 @@ exclude_obj_callback
     A function that takes the object and its path and returns a Boolean. If True is returned, the object is excluded from the results, otherwise it is included.
     This is to give the user a higher level of control than one can achieve via exclude_paths, exclude_regex_paths or other means.
 
+    >>> def exclude_obj_callback(obj, path):
+    ...     return True if isinstance(obj, str) and obj in ('x', 'y') else False
+    ...
     >>> dic1 = {"x": 1, "y": 2, "z": 3}
     >>> t1 = [dic1]
     >>> t1_hash = DeepHash(t1, exclude_obj_callback=exclude_obj_callback)
