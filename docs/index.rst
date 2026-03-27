@@ -133,7 +133,7 @@ If you want to improve the performance of DeepDiff with certain processes such a
 Read about DeepDiff optimizations at :ref:`optimizations_label`
 
 Importing
-~~~~~~~~~
+---------
 
 .. code:: python
 
@@ -144,8 +144,10 @@ Importing
     >>> from deepdiff import extract  # For extracting a path from an object
 
 
-.. note:: if you want to use DeepDiff via commandline, make sure to run:: 
-    pip install "deepdiff[cli]"
+.. note::
+    if you want to use DeepDiff via commandline, make sure to run::
+
+        pip install "deepdiff[cli]"
 
 Then you can access the commands via:
 
@@ -166,6 +168,7 @@ Then you can access the commands via:
 .. code:: bash
 
     $ deep grep --help
+
 - extract
 
 .. code:: bash
@@ -174,7 +177,7 @@ Then you can access the commands via:
 
 
 Supported data types
-~~~~~~~~~~~~~~~~~~~~
+--------------------
 
 int, string, unicode, dictionary, list, tuple, set, frozenset, OrderedDict, NamedTuple, Numpy, custom objects and more!
 

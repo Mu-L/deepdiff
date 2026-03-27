@@ -61,9 +61,8 @@ cache_size : int >= 0, default=0
     Cache size to be used to improve the performance. A cache size of zero means it is disabled.
     Using the cache_size can dramatically improve the diff performance especially for the nested objects at the cost of more memory usage. However if cache hits rate is very low, having a cache actually reduces the performance.
 
-**************
 Cache Examples
-**************
+--------------
 
 For example lets take a look at the performance of the benchmark_deeply_nested_a in the `DeepDiff-Benchmark repo <https://github.com/seperman/deepdiff-benchmark/blob/master/benchmark.py>`_ .
 

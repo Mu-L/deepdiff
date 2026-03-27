@@ -172,7 +172,7 @@ use_log_scale: Boolean, default=False
 .. _log_scale_similarity_threshold_label:
 
 Log Scale Similarity Threshold
-------------
+------------------------------
 
 log_scale_similarity_threshold: float, default = 0.1
     :ref:`use_log_scale_label` along with log_scale_similarity_threshold can be used to ignore small changes in numbers by comparing their differences in logarithmic space. This is different than ignoring the difference based on significant digits. See the example above.

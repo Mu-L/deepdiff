@@ -311,6 +311,9 @@ The pretty method has an optional parameter ``prefix`` that allows a prefix stri
 
 The ``prefix`` may also be a callable function. This function must accept ``**kwargs``; as of this version, the only parameter is ``diff`` but the signature allows for future expansion.
 The ``diff`` given will be the ``DeepDiff`` that ``pretty`` was called on; this allows interesting capabilities such as:
+
+.. code:: python
+
     >>> from deepdiff import DeepDiff
     >>> t1={1,2,4}
     >>> t2={2,3}

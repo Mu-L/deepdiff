@@ -110,7 +110,7 @@ what if we assume last names are unique and group by last_name?
 The path is perhaps more readable now: `root['Molotov']['zip']`. It is more clear that the zip code of Molotov has changed.
 
 .. Note::
-    The parameters in the deep diff commandline are a subset of those in :ref:`deepdiff_module_label` 's Python API.
+    The parameters in the deep diff commandline are a subset of those in :ref:`deepdiff_label` 's Python API.
 
 To output in a specific format, for example the colored compact view (see :doc:`colored_view` for output details):
 
@@ -210,7 +210,7 @@ Run
 
 to get the options:
 
-.. code-block:: bash
+.. code-block:: text
 
     $ deep patch --help
     Usage: deep patch [OPTIONS] PATH DELTA_PATH

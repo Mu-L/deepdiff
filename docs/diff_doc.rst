@@ -1,7 +1,7 @@
-.. _deepdiff_module_label:
+:orphan:
 
-DeepDiff
-========
+DeepDiff Module
+===============
 
 **DeepDiff is now part of** `Qluster <https://qluster.ai>`__.
 

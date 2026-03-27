@@ -92,7 +92,7 @@ Authors in order of the timeline of their contributions:
 -  `dtorres-sf <https://github.com/dtorres-sf>`__ for fixing iterable
    moved items when iterable_compare_func is used.
 -  `Florian Finkernagel <https://github.com/TyberiusPrime>`__ for pandas
-and polars support.
+   and polars support.
 - Mathis Chenuet `artemisart <https://github.com/artemisart>`__ for
   fixing slots classes comparison and PR review.
 - Sherjeel Shabih `sherjeelshabih <https://github.com/sherjeelshabih>`__

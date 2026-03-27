@@ -68,8 +68,10 @@ force : Boolean, default=False
 always_include_values : Boolean, default=False
     :ref:`always_include_values_label` is used to make sure the delta objects includes the values that were changed. Sometime Delta tries to be efficient not include the values when it can get away with it. By setting this parameter to True, you ensure that the Delta object will include the values.
 
+.. _delta_fill:
+
 fill : Any, default=No Fill
-    :ref:`delta_fill` This is only relevant if `force` is set. This parameter only applies when force is set and trying to fill an existing array. If the index of the array being applied is larger than the length of the array this value will be used to fill empty spaces of the array to extend it in order to add the new value. If this parameter is not set, the items will get dropped and the array not extended. If this parameter is set with a callable function, it will get called each time a fill item is needed. It will be provided with three arguments: first argument is the array being filled, second argument is the value that is being added to the array, the third argument is the path that is being added.
+    This is only relevant if `force` is set. This parameter only applies when force is set and trying to fill an existing array. If the index of the array being applied is larger than the length of the array this value will be used to fill empty spaces of the array to extend it in order to add the new value. If this parameter is not set, the items will get dropped and the array not extended. If this parameter is set with a callable function, it will get called each time a fill item is needed. It will be provided with three arguments: first argument is the array being filled, second argument is the value that is being added to the array, the third argument is the path that is being added.
     Example function: `def fill(obj, value, path): return "Camry" if "car" in path else None`
 
 
@@ -190,7 +192,7 @@ You can create a delta object from the list of flat dictionaries that are produc
 Flat Rows List
 --------------
 
-You can create a delta object from the list of flat dictionaries that are produced via :ref:`to_flat_rows_label`. Read more on :ref:`delta_from_flat_rows_label`.
+You can create a delta object from the list of flat dictionaries that are produced via :ref:`delta_to_flat_rows_label`. Read more on :ref:`delta_to_flat_rows_label`.
 
 
 .. _delta_deserializer_label:

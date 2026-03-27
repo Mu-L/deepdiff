@@ -430,10 +430,11 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         Add a detected change to the reference-style result dictionary.
         report_type will be added to level.
         (We'll create the text-style report from there later.)
+
         :param report_type: A well defined string key describing the type of change.
-                            Examples: "set_item_added", "values_changed"
+            Examples: "set_item_added", "values_changed"
         :param parent: A DiffLevel object describing the objects in question in their
-                       before-change and after-change object structure.
+            before-change and after-change object structure.
         :param extra_info: A dict that describe this result
         :rtype: None
         """

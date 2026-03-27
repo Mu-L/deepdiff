@@ -1,3 +1,5 @@
+:orphan:
+
 grep is a more user friendly interface for DeepSearch. It takes exactly the same arguments as DeepSearch except that you pipe the object into it instead of passing it as a parameter.
 
 It works just like grep in linux shell!
