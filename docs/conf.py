@@ -129,19 +129,19 @@ html_theme = 'alabaster'
 html_theme_options = {
     'description': 'Get the deep difference of any Python objects.',
     'show_powered_by': False,
-    'logo': 'logo_long_B1_black.svg',
-    'logo_name': 'Zepworks DeepDiff',
+    'logo': 'qluster_grey_on_white_bg_optimized.svg',
+    'logo_name': 'Qluster DeepDiff',
     'analytics_id': 'UA-59104908-2',
     'fixed_sidebar': True,
     'extra_nav_links': {
+        'Qluster (Resolve bad data before release)': 'https://getqluster.com',
         'Zepworks (Blog)': 'https://zepworks.com',
-        'Qluster (Smart ETL)': 'https://qluster.ai',
-        'Github': 'https://github.com/seperman/deepdiff'
+        'Github': 'https://github.com/qlustered/deepdiff'
     },
     'show_relbars': True,
     # 'github_repo': 'deepdiff',
     'anchor': '#DDD',
-    'touch_icon': 'logo.svg',
+    'touch_icon': 'Qluster_square_grey_optimized.svg',
     'github_button': True,
     'github_user': 'seperman',
     'github_count': True,
