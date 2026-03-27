@@ -146,12 +146,66 @@ html_theme_options = {
     'source_branch': 'master',
     'source_directory': 'docs/',
     'light_css_variables': {
+        # Fonts
         'font-stack': "'Open Sans', sans-serif",
         'font-stack--headings': "'Open Sans', sans-serif",
+        'font-size--normal': '17px',
+        # Body colors (from Alabaster)
+        'color-foreground-primary': '#3E4349',
+        'color-foreground-secondary': '#555',
+        'color-foreground-muted': '#888',
+        'color-background-primary': '#fff',
+        'color-background-secondary': '#f8f8f8',
+        'color-background-border': '#EEE',
+        # Links
+        'color-link': '#004B6B',
+        'color-link--hover': '#6D4100',
+        # Sidebar
+        'color-sidebar-background': '#fff',
+        'color-sidebar-text': '#555',
+        'color-sidebar-link': '#444',
+        'color-sidebar-link-text': '#444',
+        'color-sidebar-link-text--top-level': '#444',
+        'color-sidebar-item-background--hover': '#EEE',
+        'color-sidebar-item-expander-color': '#444',
+        'color-sidebar-caption-text': '#444',
+        'color-sidebar-item-background--current': 'transparent',
+        'color-sidebar-search-border': '#CCC',
+        # Code blocks
+        'color-code-background': '#ecf0f3',
+        'color-code-foreground': '#222',
+        'color-inline-code-background': '#ecf0f3',
+        # Admonitions
+        'color-admonition-background': '#EEE',
+        'color-admonition-title': '#195190',
+        'color-admonition-title-background': 'rgba(25, 81, 144, 0.1)',
+        # Table of contents (right sidebar)
+        'color-toc-item-text': '#444',
+        'color-toc-item-text--hover': '#195190',
+        'color-toc-item-text--active': '#195190',
+        # Headerlink
+        'color-header-text': '#3E4349',
     },
     'dark_css_variables': {
         'font-stack': "'Open Sans', sans-serif",
         'font-stack--headings': "'Open Sans', sans-serif",
+        'font-size--normal': '17px',
+        # Links
+        'color-link': '#7EB8DA',
+        'color-link--hover': '#D4A76A',
+        # Sidebar
+        'color-sidebar-background': '#1a1c1e',
+        'color-sidebar-background-border': '#2d2d2d',
+        'color-sidebar-link-text': '#ccc',
+        'color-sidebar-link-text--top-level': '#ccc',
+        'color-sidebar-caption-text': '#ccc',
+        'color-sidebar-item-background--hover': '#2d2d2d',
+        # Admonitions
+        'color-admonition-title': '#7EB8DA',
+        'color-admonition-title-background': 'rgba(126, 184, 218, 0.15)',
+        # TOC
+        'color-toc-item-text--hover': '#7EB8DA',
+        'color-toc-item-text--active': '#7EB8DA',
     },
 }
 
@@ -167,7 +221,7 @@ html_theme_options = {
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = None
+html_logo = '_static/qluster_grey_on_white_bg_optimized.svg'
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
