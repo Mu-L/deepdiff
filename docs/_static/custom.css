@@ -24,6 +24,9 @@ h1, h2, h3, h4, h5, h6 {
   body[data-theme="dark"] .toc-tree a.active {
     color: #7EB8DA;
   }
+  body[data-theme="auto"] .sidebar-brand img {
+    filter: brightness(0) invert(1);
+  }
 }
 
 body[data-theme="dark"] .sidebar-tree .current-page > .reference {
@@ -31,4 +34,7 @@ body[data-theme="dark"] .sidebar-tree .current-page > .reference {
 }
 body[data-theme="dark"] .toc-tree a.active {
   color: #7EB8DA;
+}
+body[data-theme="dark"] .sidebar-brand img {
+  filter: brightness(0) invert(1);
 }
