@@ -41,6 +41,15 @@ Approximate decimals comparison (Significant digits after the point):
     >>> DeepDiff(t1, t2, significant_digits=1)
     {'values_changed': {'root': {'new_value': Decimal('1.57'), 'old_value': Decimal('1.52')}}}
 
+Approximate fractions comparison (Significant digits after the point):
+    >>> from fractions import Fraction
+    >>> t1 = Fraction(22, 7)   # 3.142857...
+    >>> t2 = Fraction(355, 113)  # 3.141592...
+    >>> DeepDiff(t1, t2, significant_digits=2)
+    {}
+    >>> DeepDiff(t1, t2, significant_digits=3)
+    {'values_changed': {'root': {'new_value': Fraction(355, 113), 'old_value': Fraction(22, 7)}}}
+
 Approximate float comparison (Significant digits after the point):
     >>> t1 = [ 1.1129, 1.3359 ]
     >>> t2 = [ 1.113, 1.3362 ]
@@ -131,10 +140,17 @@ math_epsilon: Decimal, default = None
 
     To check against that the math core module provides the valuable isclose() function. It evaluates the being close of two numbers to each other, with reference to an epsilon (abs_tol). This is superior to the format function, as it evaluates the mathematical representation and not the string representation.
 
-Example:
+Example with Decimal:
     >>> from decimal import Decimal
     >>> d1 = {"a": Decimal("7.175")}
     >>> d2 = {"a": Decimal("7.174")}
+    >>> DeepDiff(d1, d2, math_epsilon=0.01)
+    {}
+
+Example with Fraction:
+    >>> from fractions import Fraction
+    >>> d1 = {"a": Fraction(7175, 1000)}
+    >>> d2 = {"a": Fraction(7174, 1000)}
     >>> DeepDiff(d1, d2, math_epsilon=0.01)
     {}
 

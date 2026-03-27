@@ -13,6 +13,7 @@ from typing import NamedTuple, Any, List, Optional, Dict, Union, TYPE_CHECKING, 
 from collections.abc import Mapping, Sequence, Generator
 from ast import literal_eval
 from decimal import Decimal, localcontext, InvalidOperation as InvalidDecimalOperation
+from fractions import Fraction
 from itertools import repeat
 from orderly_set import StableSetEq as SetOrderedBase  # median: 1.0867 s for cache test, 5.63s for all tests
 from threading import Timer
@@ -187,14 +188,14 @@ strings: Tuple[Type[str], Type[bytes], Type[memoryview]] = (str, bytes, memoryvi
 unicode_type = str
 bytes_type = bytes
 only_complex_number: Tuple[Type[Any], ...] = (complex,) + numpy_complex_numbers
-only_numbers: Tuple[Type[Any], ...] = (int, float, complex, Decimal) + numpy_numbers
+only_numbers: Tuple[Type[Any], ...] = (int, float, complex, Decimal, Fraction) + numpy_numbers
 datetimes: Tuple[Type[Any], ...] = (datetime.datetime, datetime.date, datetime.timedelta, datetime.time, np_datetime64)
 ipranges: Tuple[Type[Any], ...] = (ipaddress.IPv4Interface, ipaddress.IPv6Interface, ipaddress.IPv4Network, ipaddress.IPv6Network, ipaddress.IPv4Address, ipaddress.IPv6Address)
 uuids: Tuple[Type[uuid.UUID]] = (uuid.UUID, )
 times: Tuple[Type[Any], ...] = (datetime.datetime, datetime.time, np_datetime64)
 numbers: Tuple[Type[Any], ...] = only_numbers + datetimes
 # Type alias for use in type annotations
-NumberType = Union[int, float, complex, Decimal, datetime.datetime, datetime.date, datetime.timedelta, datetime.time, Any]
+NumberType = Union[int, float, complex, Decimal, Fraction, datetime.datetime, datetime.date, datetime.timedelta, datetime.time, Any]
 booleans: Tuple[Type[bool], Type[Any]] = (bool, np_bool_)
 
 basic_types: Tuple[Type[Any], ...] = strings + numbers + uuids + booleans + (type(None), )
@@ -433,6 +434,11 @@ def number_to_string(number: Any, significant_digits: int, number_format_notatio
                 # For example '999.99999999' will become '1000.000000' after quantize
                 ctx.prec += 1
                 number = number.quantize(Decimal('0.' + '0' * significant_digits))
+    elif isinstance(number, Fraction):
+        # Convert Fraction to float so that string formatting works on Python < 3.12
+        number = round(float(number), significant_digits)
+        if significant_digits == 0:
+            number = int(number)
     elif isinstance(number, only_complex_number):  # type: ignore
         # Case for complex numbers.
         number = number.__class__(

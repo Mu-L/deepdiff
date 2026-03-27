@@ -65,19 +65,31 @@ Ignore Numeric Type Changes
 ignore_numeric_type_changes: Boolean, default = False
     Whether to ignore numeric type changes or not. For example 10 vs. 10.0 are considered the same if ignore_numeric_type_changes is set to True.
 
-Example
+Example with Decimal
     >>> from decimal import Decimal
     >>> from deepdiff import DeepDiff
-    >>> 
+    >>>
     >>> t1 = Decimal('10.01')
     >>> t2 = 10.01
-    >>> 
+    >>>
     >>> DeepDiff(t1, t2)
     {'type_changes': {'root': {'old_type': <class 'decimal.Decimal'>, 'new_type': <class 'float'>, 'old_value': Decimal('10.01'), 'new_value': 10.01}}}
     >>> DeepDiff(t1, t2, ignore_numeric_type_changes=True)
     {}
 
 Note that this parameter only works for comparing numbers with numbers. If you compare a number to a string value of the number, this parameter does not solve your problem:
+
+Example with Fraction
+    >>> from fractions import Fraction
+    >>> from deepdiff import DeepDiff
+    >>>
+    >>> t1 = Fraction(1, 2)
+    >>> t2 = 0.5
+    >>>
+    >>> DeepDiff(t1, t2)
+    {'type_changes': {'root': {'old_type': <class 'fractions.Fraction'>, 'new_type': <class 'float'>, 'old_value': Fraction(1, 2), 'new_value': 0.5}}}
+    >>> DeepDiff(t1, t2, ignore_numeric_type_changes=True)
+    {}
 
 Example:
     >>> t1 = Decimal('10.01')
