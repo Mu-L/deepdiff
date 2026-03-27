@@ -3,9 +3,9 @@
 DeepDiff Module
 ===============
 
-**DeepDiff is now part of** `Qluster <https://qluster.ai>`__.
+**DeepDiff is now part of** `Qluster <https://getqluster.com>`__.
 
-*If you're building workflows around data validation and correction,* `Qluster <https://qluster.ai>`__ *gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
+*If you're building workflows around data validation and correction,* `Qluster <https://getqluster.com>`__ *gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
 
 Deep Difference of dictionaries, iterables, strings and almost any other object.
 It will recursively look for all the changes.

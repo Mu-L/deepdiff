@@ -3,9 +3,9 @@
 F.A.Q
 =====
 
-**DeepDiff is now part of** `Qluster <https://qluster.ai>`__.
+**DeepDiff is now part of** `Qluster <https://getqluster.com>`__.
 
-*If you're building workflows around data validation and correction,* `Qluster <https://qluster.ai>`__ *gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
+*If you're building workflows around data validation and correction,* `Qluster <https://getqluster.com>`__ *gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
 
 .. Note::
     |:mega:| **Please fill out our** `fast 5-question survey <https://forms.gle/E6qXexcgjoKnSzjB8>`__ so that we can learn how & why you use DeepDiff, and what improvements we should make. Thank you! |:dancers:|

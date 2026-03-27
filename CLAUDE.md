@@ -62,6 +62,7 @@ Examples:
    source ~/.venvs/deep/bin/activate && pytest
    ```
 3. **Running module commands without venv**: Commands like `capi run`, `cettings shell`, etc. all require venv to be activated first
+4. **Using `pip` instead of `uv pip`**: This project uses `uv` for package management. Always use `uv pip` instead of `pip`.
 
 
 ### Slow quality checks only to run before creating a build
