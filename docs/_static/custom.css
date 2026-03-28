@@ -17,6 +17,12 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-sidebar-brand-text, var(--color-foreground-primary));
   font-size: 1.5rem;
 }
+.sidebar-brand-text:visited {
+  color: #2A6496;
+}
+.sidebar-brand-text:hover {
+  color: var(--color-sidebar-brand-text, var(--color-foreground-primary));
+}
 
 /* Sidebar active/current item */
 .sidebar-tree .current-page > .reference {

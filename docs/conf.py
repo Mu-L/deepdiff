@@ -106,7 +106,8 @@ exclude_patterns = ['_build']
 
 # The name of the Pygments (syntax highlighting) style to use.
 # Let Furo use its default pygments styles (light + dark mode aware)
-# pygments_style = 'sphinx'
+pygments_style = 'xcode'
+pygments_dark_style = 'github-dark'
 
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []
@@ -200,6 +201,9 @@ html_theme_options = {
         'color-sidebar-link-text--top-level': '#ccc',
         'color-sidebar-caption-text': '#ccc',
         'color-sidebar-item-background--hover': '#2d2d2d',
+        # Code blocks
+        'color-code-background': '#2b2b2b',
+        'color-inline-code-background': '#2b2b2b',
         # Admonitions
         'color-admonition-title': '#7EB8DA',
         'color-admonition-title-background': 'rgba(126, 184, 218, 0.15)',

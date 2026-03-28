@@ -3,7 +3,11 @@
 Support
 =======
 
-**DeepDiff is now part of** `Qluster <https://getqluster.com>`__.
+.. |qluster_link| raw:: html
+
+   <a href="https://getqluster.com"><strong>Qluster</strong></a>
+
+DeepDiff is now part of |qluster_link|.
 
 *If you're building workflows around data validation and correction,* `Qluster <https://getqluster.com>`__ *gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
 
