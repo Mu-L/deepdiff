@@ -119,6 +119,15 @@ Authors in order of the timeline of their contributions:
   setuptools use to pyproject.toml
 - `Diogo Correia <https://github.com/diogotcorreia>`__ for reporting security vulnerability in Delta and DeepDiff that could allow remote code execution.
 - `am-periphery <https://github.com/am-periphery>`__ for reporting CVE-2026-33155: denial-of-service via crafted pickle payloads triggering massive memory allocation.
+- `echan5 <https://github.com/echan5>`__ for adding callable ``group_by`` support.
+- `yannrouillard <https://github.com/yannrouillard>`__ for fixing colored view display when all list items are removed.
+- `tpvasconcelos <https://github.com/tpvasconcelos>`__ for fixing ``__slots__`` handling for objects with ``__getattr__``.
+- `devin13cox <https://github.com/devin13cox>`__ for always using t1 path for reporting.
+- `vitalis89 <https://github.com/vitalis89>`__ for fixing ``ignore_keys`` issue in ``detailed__dict__``.
+- `ljames8 <https://github.com/ljames8>`__ for fixing logarithmic similarity type hint.
+- `srini047 <https://github.com/srini047>`__ for fixing README typo.
+- `Nagato-Yuzuru <https://github.com/Nagato-Yuzuru>`__ for colored view tests.
+- `akshat62 <https://github.com/akshat62>`__ for adding Fraction numeric support.
 
 
 .. _Sep Dehpour (Seperman): http://www.zepworks.com

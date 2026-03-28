@@ -43,6 +43,7 @@ DeepDiff 8-7-0
 - Fixed parameter bug in `to_flat_dicts` where `include_action_in_path` and `report_type_changes` were not being passed through
 - Fixed `ignore_keys` issue in `detailed__dict__` thanks to @vitalis89
 - Fixed logarithmic similarity type hint thanks to @ljames8
+- Added `Fraction` numeric support thanks to @akshat62
 
 DeepDiff 8-6-2
 - **Security (CVE-2026-33155):** Fixed a memory exhaustion DoS vulnerability in `_RestrictedUnpickler` by limiting the maximum allocation size for `bytes` and `bytearray` during deserialization.

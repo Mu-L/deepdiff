@@ -49,6 +49,7 @@ DeepDiff 8-7-0
    - Fixed parameter bug in ``to_flat_dicts`` where ``include_action_in_path`` and ``report_type_changes`` were not being passed through
    - Fixed ``ignore_keys`` issue in ``detailed__dict__`` thanks to `vitalis89 <https://github.com/vitalis89>`__
    - Fixed logarithmic similarity type hint thanks to `ljames8 <https://github.com/ljames8>`__
+   - Added ``Fraction`` numeric support thanks to `akshat62 <https://github.com/akshat62>`__
 
 DeepDiff 8-6-2
 --------------
