@@ -31,7 +31,7 @@ The DeepDiff library includes the following modules:
 What Is New
 ***********
 
-DeepDiff 8-7-0
+DeepDiff 9-0-0
 --------------
 
    - migration note:
@@ -50,63 +50,6 @@ DeepDiff 8-7-0
    - Fixed ``ignore_keys`` issue in ``detailed__dict__`` thanks to `vitalis89 <https://github.com/vitalis89>`__
    - Fixed logarithmic similarity type hint thanks to `ljames8 <https://github.com/ljames8>`__
    - Added ``Fraction`` numeric support thanks to `akshat62 <https://github.com/akshat62>`__
-
-DeepDiff 8-6-2
---------------
-
-    - Security fix (CVE-2026-33155): Prevent denial-of-service via crafted pickle payloads that trigger massive memory allocation through the REDUCE opcode. Size-sensitive callables like ``bytes()`` and ``bytearray()`` are now wrapped to reject allocations exceeding 128 MB.
-
-DeepDiff 8-6-1
---------------
-
-    - Patched security vulnerability in the Delta class which was vulnerable to class pollution via its constructor, and when combined with a gadget available in DeltaDiff itself, it could lead to Denial of Service and Remote Code Execution (via insecure Pickle deserialization).
-
-
-DeepDiff 8-6-0
---------------
-
-   - Added Colored View thanks to @mauvilsa
-   - Added support for applying deltas to NamedTuple thanks to @paulsc
-   - Fixed test_delta.py with Python 3.14 thanks to @Romain-Geissler-1A
-   - Added python property serialization to json
-   - Added ip address serialization
-   - Switched to UV from pip
-   - Added Claude.md
-   - Added uuid hashing thanks to @akshat62
-   - Added ``ignore_uuid_types`` flag to DeepDiff to avoid type reports
-     when comparing UUID and string.
-   - Added comprehensive type hints across the codebase (multiple commits
-     for better type safety)
-   - Added support for memoryview serialization
-   - Added support for bytes serialization (non-UTF8 compatible)
-   - Fixed bug where group_by with numbers would leak type info into group
-     path reports
-   - Fixed bug in ``_get_clean_to_keys_mapping without`` explicit
-     significant digits
-   - Added support for python dict key serialization
-   - Enhanced support for IP address serialization with safe module imports
-   - Added development tooling improvements (pyright config, .envrc
-     example)
-   - Updated documentation and development instructions
-
-
-DeepDiff 8-5-0
---------------
-
-    - Updating deprecated pydantic calls
-    - Switching to pyproject.toml
-    - Fix for moving nested tables when using iterable_compare_func.  by 
-    - Fix recursion depth limit when hashing numpy.datetime64
-    - Moving from legacy setuptools use to pyproject.toml
-
-
-DeepDiff 8-4-2
---------------
-
-    - fixes the type hints for the base
-    - fixes summarize so if json dumps fails, we can still get a repr of the results
-    - adds ipaddress support
-
 
 *********
 Tutorials
