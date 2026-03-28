@@ -1,4 +1,4 @@
-# DeepDiff v 8.7.0
+# DeepDiff v 9.0.0
 
 ![Downloads](https://img.shields.io/pypi/dm/deepdiff.svg?style=flat)
 ![Python Versions](https://img.shields.io/pypi/pyversions/deepdiff.svg?style=flat)
@@ -21,7 +21,7 @@
 
 Tested on Python 3.10+ and PyPy3.
 
-- **[Documentation](https://zepworks.com/deepdiff/8.7.0/)**
+- **[Documentation](https://zepworks.com/deepdiff/9.0.0/)**
 
 ## What is new?
 
