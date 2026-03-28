@@ -398,7 +398,7 @@ def type_is_subclass_of_type_group(item: Any, type_group: Tuple[Type[Any], ...])
 
 def get_doc(doc_filename: str) -> str:
     try:
-        with open(os.path.join(current_dir, '../docs/', doc_filename), 'r') as doc_file:
+        with open(os.path.join(current_dir, 'docstrings', doc_filename), 'r') as doc_file:
             doc = doc_file.read()
     except Exception:  # pragma: no cover
         doc = 'Failed to load the docstrings. Please visit: https://zepworks.com/deepdiff/current/'  # pragma: no cover

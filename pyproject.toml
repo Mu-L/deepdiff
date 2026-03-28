@@ -58,6 +58,7 @@ dev = [
   "nox==2026.2.9",
   "uuid6==2025.0.1",
   "pytz",
+  "flit-core==3.12.0",
 ]
 docs = [
   "Sphinx~=8.1.3",
