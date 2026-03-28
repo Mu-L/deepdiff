@@ -1,3 +1,4 @@
+import re
 import logging
 from ast import literal_eval
 from functools import lru_cache
@@ -6,6 +7,30 @@ logger = logging.getLogger(__name__)
 
 GETATTR = 'GETATTR'
 GET = 'GET'
+
+
+class _WildcardToken:
+    """Sentinel object for wildcard path tokens.
+
+    Using a dedicated class (instead of plain strings) ensures that a literal
+    dict key ``'*'`` (parsed from ``root['*']``) is never confused with the
+    wildcard ``*`` (parsed from ``root[*]``).
+    """
+    def __init__(self, symbol):
+        self._symbol = symbol
+
+    def __repr__(self):
+        return self._symbol
+
+    def __eq__(self, other):
+        return isinstance(other, _WildcardToken) and self._symbol == other._symbol
+
+    def __hash__(self):
+        return hash(('_WildcardToken', self._symbol))
+
+
+SINGLE_WILDCARD = _WildcardToken('*')
+MULTI_WILDCARD = _WildcardToken('**')
 
 
 class PathExtractionError(ValueError):
@@ -21,6 +46,16 @@ def _add_to_elements(elements, elem, inside):
     if not elem:
         return
     if not elem.startswith('__'):
+        # Handle wildcard tokens (* and **) as-is.
+        # Unquoted root[*] arrives as bare '*' which matches the string check.
+        # Quoted root['*'] arrives as "'*'" which does NOT match, so it falls
+        # through to literal_eval and becomes the plain string '*' — which is
+        # distinct from the _WildcardToken sentinel and thus treated as a
+        # literal dict key.
+        if elem in ('*', '**'):
+            action = GETATTR if inside == '.' else GET
+            elements.append((SINGLE_WILDCARD if elem == '*' else MULTI_WILDCARD, action))
+            return
         remove_quotes = False
         if '𝆺𝅥𝅯' in elem or '\\' in elem:
             remove_quotes = True
@@ -321,3 +356,129 @@ def stringify_path(path, root_element=DEFAULT_FIRST_ELEMENT, quote_str="'{}'"):
         else:
             result.append(f".{element}")
     return ''.join(result)
+
+
+# Regex to detect wildcard segments in a raw path string.
+# Matches [*], [**], .*, .** that are NOT inside quotes.
+_WILDCARD_RE = re.compile(
+    r'\[\*\*?\]'        # [*] or [**]
+    r'|\.\*\*?(?=[.\[]|$)'  # .* or .** followed by . or [ or end of string
+)
+
+
+def path_has_wildcard(path):
+    """Check if a path string contains wildcard segments (* or **)."""
+    return bool(_WILDCARD_RE.search(path))
+
+
+class GlobPathMatcher:
+    """Pre-compiled matcher for a single glob pattern path.
+
+    Parses a pattern like ``root['users'][*]['password']`` into segments
+    and matches concrete path strings against it.
+
+    ``*`` matches exactly one path segment (any key, index, or attribute).
+    ``**`` matches zero or more path segments.
+    """
+
+    def __init__(self, pattern_path):
+        self.original_pattern = pattern_path
+        elements = _path_to_elements(pattern_path, root_element=('root', GETATTR))
+        # Skip the root element for matching
+        self._pattern = elements[1:]
+
+    def match(self, path_string):
+        """Return True if *path_string* matches this pattern exactly."""
+        elements = _path_to_elements(path_string, root_element=('root', GETATTR))
+        target = elements[1:]
+        return self._match_segments(self._pattern, target, 0, 0)
+
+    def match_or_is_ancestor(self, path_string):
+        """Return True if *path_string* matches OR is an ancestor of a potential match.
+
+        This is needed for ``include_paths``: we must not prune a path that
+        could lead to a matching descendant.
+        """
+        elements = _path_to_elements(path_string, root_element=('root', GETATTR))
+        target = elements[1:]
+        return (self._match_segments(self._pattern, target, 0, 0) or
+                self._could_match_descendant(self._pattern, target, 0, 0))
+
+    def match_or_is_descendant(self, path_string):
+        """Return True if *path_string* matches OR is a descendant of a matching path.
+
+        This checks whether the pattern matches any prefix of *path_string*,
+        meaning the path is "inside" a matched subtree.
+        """
+        elements = _path_to_elements(path_string, root_element=('root', GETATTR))
+        target = elements[1:]
+        # Check exact match first
+        if self._match_segments(self._pattern, target, 0, 0):
+            return True
+        # Check if any prefix of target matches (making this path a descendant)
+        for length in range(len(target)):
+            if self._match_segments(self._pattern, target[:length], 0, 0):
+                return True
+        return False
+
+    @staticmethod
+    def _match_segments(pattern, target, pi, ti):
+        """Recursive segment matcher with backtracking for ``**``."""
+        while pi < len(pattern) and ti < len(target):
+            pat_elem = pattern[pi][0]
+
+            if pat_elem == MULTI_WILDCARD:
+                # ** matches zero or more segments — try every suffix
+                for k in range(ti, len(target) + 1):
+                    if GlobPathMatcher._match_segments(pattern, target, pi + 1, k):
+                        return True
+                return False
+            elif pat_elem == SINGLE_WILDCARD:
+                # * matches exactly one segment regardless of value/action
+                pi += 1
+                ti += 1
+            else:
+                tgt_elem = target[ti][0]
+                if pat_elem != tgt_elem:
+                    return False
+                pi += 1
+                ti += 1
+
+        # Consume any trailing ** (they can match zero segments)
+        while pi < len(pattern) and pattern[pi][0] == MULTI_WILDCARD:
+            pi += 1
+
+        return pi == len(pattern) and ti == len(target)
+
+    @staticmethod
+    def _could_match_descendant(pattern, target, pi, ti):
+        """Check if *target* is a prefix that could lead to a match deeper down."""
+        if ti == len(target):
+            # Target exhausted — it's an ancestor if pattern has remaining segments
+            return pi < len(pattern)
+
+        if pi >= len(pattern):
+            return False
+
+        pat_elem = pattern[pi][0]
+
+        if pat_elem == MULTI_WILDCARD:
+            return (GlobPathMatcher._could_match_descendant(pattern, target, pi + 1, ti) or
+                    GlobPathMatcher._could_match_descendant(pattern, target, pi, ti + 1))
+        elif pat_elem == SINGLE_WILDCARD:
+            return GlobPathMatcher._could_match_descendant(pattern, target, pi + 1, ti + 1)
+        else:
+            tgt_elem = target[ti][0]
+            if pat_elem != tgt_elem:
+                return False
+            return GlobPathMatcher._could_match_descendant(pattern, target, pi + 1, ti + 1)
+
+
+def compile_glob_paths(paths):
+    """Compile a list of glob pattern strings into GlobPathMatcher objects.
+
+    Returns a list of ``GlobPathMatcher`` or ``None`` if *paths* is empty/None.
+    """
+    if not paths:
+        return None
+    return [GlobPathMatcher(p) for p in paths]

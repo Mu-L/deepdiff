@@ -32,10 +32,12 @@ exclude_types: list, default = None
 
 exclude_paths: list, default = None
     List of paths to exclude from the report. If only one item, you can pass it as a string instead of a list containing only one path.
+    Supports :ref:`wildcard_paths_label`: use ``[*]`` to match one segment or ``[**]`` to match any depth.
 
 
 include_paths: list, default = None
     List of the only paths to include in the report. If only one item, you can pass it as a string.
+    Supports :ref:`wildcard_paths_label`: use ``[*]`` to match one segment or ``[**]`` to match any depth.
 
 
 exclude_regex_paths: list, default = None

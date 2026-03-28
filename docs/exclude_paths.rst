@@ -59,6 +59,49 @@ Example
     {'values_changed': {"root['foo']['bar']": {'new_value': 'banana', 'old_value': 'potato'}}}
 
 
+.. _wildcard_paths_label:
+
+Wildcard (Glob) Paths
+---------------------
+
+Both ``exclude_paths`` and ``include_paths`` support wildcard patterns for matching multiple paths at once:
+
+- ``[*]`` or ``.*`` matches exactly **one** path segment (any key, index, or attribute).
+- ``[**]`` or ``.**`` matches **zero or more** path segments at any depth.
+
+Wildcard patterns must use the full ``root`` prefix (shorthand keys are not supported for wildcards).
+
+Exclude all ``password`` fields regardless of the parent key:
+    >>> t1 = {"users": {"alice": {"name": "Alice", "password": "s1"}, "bob": {"name": "Bob", "password": "s2"}}}
+    >>> t2 = {"users": {"alice": {"name": "Alice", "password": "x1"}, "bob": {"name": "Bob", "password": "x2"}}}
+    >>> DeepDiff(t1, t2, exclude_paths=["root['users'][*]['password']"])
+    {}
+
+Include only ``name`` fields at any depth:
+    >>> t1 = {"a": {"name": "A", "secret": 1}, "b": {"name": "B", "secret": 2}}
+    >>> t2 = {"a": {"name": "X", "secret": 1}, "b": {"name": "Y", "secret": 2}}
+    >>> result = DeepDiff(t1, t2, include_paths=["root[*]['name']"])
+    >>> set(result.get('values_changed', {}).keys()) == {"root['a']['name']", "root['b']['name']"}
+    True
+
+Use ``[**]`` to match at any depth:
+    >>> t1 = {"config": {"db": {"password": "old"}, "cache": {"password": "old"}}}
+    >>> t2 = {"config": {"db": {"password": "new"}, "cache": {"password": "new"}}}
+    >>> DeepDiff(t1, t2, exclude_paths=["root[**]['password']"])
+    {}
+
+Literal keys named ``*`` or ``**`` are not treated as wildcards when quoted:
+    >>> t1 = {"*": 1, "a": 2}
+    >>> t2 = {"*": 10, "a": 20}
+    >>> result = DeepDiff(t1, t2, exclude_paths=["root['*']"])
+    >>> "root['a']" in result.get('values_changed', {})
+    True
+
+When both ``exclude_paths`` and ``include_paths`` apply to the same path, exclusion takes precedence.
+
+Wildcards also work with ``DeepHash`` and ``DeepSearch`` exclude_paths.
+
+
 .. _exclude_regex_paths_label:
 
 Exclude Regex Paths
