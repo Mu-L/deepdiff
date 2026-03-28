@@ -4,6 +4,20 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: normal;
 }
 
+/* Sidebar brand: logo links externally, text links to docs root */
+.sidebar-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--sidebar-item-spacing-vertical) var(--sidebar-item-spacing-horizontal);
+}
+.sidebar-brand-text {
+  overflow-wrap: anywhere;
+  text-decoration: none;
+  color: var(--color-sidebar-brand-text, var(--color-foreground-primary));
+  font-size: 1.5rem;
+}
+
 /* Sidebar active/current item */
 .sidebar-tree .current-page > .reference {
   color: #195190;
