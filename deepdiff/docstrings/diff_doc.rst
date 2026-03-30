@@ -1,22 +1,18 @@
 :orphan:
 
-DeepDiff Module
-===============
-
 .. |qluster_link| raw:: html
 
    <a href="/qluster"><strong>Qluster</strong></a>
 
-.. tip::
-    DeepDiff is now part of |qluster_link|.
+.. admonition:: DeepDiff is now part of |qluster_link|.
 
     *If you're building workflows around data validation and correction,* `Qluster </qluster>`__ *gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
 
+DeepDiff Module
+===============
+
 Deep Difference of dictionaries, iterables, strings and almost any other object.
 It will recursively look for all the changes.
-
-.. Note::
-    |:mega:| **Please fill out our** `fast 5-question survey <https://forms.gle/E6qXexcgjoKnSzjB8>`__ so that we can learn how & why you use DeepDiff, and what improvements we should make. Thank you! |:dancers:|
 
 **Parameters**
 
@@ -230,3 +226,6 @@ view: string, default = text
 **Supported data types**
 
 int, string, unicode, dictionary, list, tuple, set, frozenset, OrderedDict, NamedTuple, Numpy, custom objects and more!
+
+.. Note::
+    |:mega:| **Please fill out our** `fast 5-question survey <https://forms.gle/E6qXexcgjoKnSzjB8>`__ so that we can learn how & why you use DeepDiff, and what improvements we should make. Thank you! |:dancers:|

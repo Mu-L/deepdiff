@@ -7,9 +7,9 @@ Support
 
    <a href="/qluster"><strong>Qluster</strong></a>
 
-DeepDiff is now part of |qluster_link|.
+.. admonition:: DeepDiff is now part of |qluster_link|.
 
-*If you're building workflows around data validation and correction,* `Qluster </qluster>`__ *gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
+    *If you're building workflows around data validation and correction,* `Qluster </qluster>`__ *gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
 
 Thank you for using DeepDiff!
 If you find a bug, please create a ticket on our `GitHub repo <https://github.com/seperman/deepdiff>`__
