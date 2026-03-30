@@ -80,7 +80,7 @@ Authors in order of the timeline of their contributions:
 - [echan5](https://github.com/echan5) for adding callable `group_by` support.
 - [yannrouillard](https://github.com/yannrouillard) for fixing colored view display when all list items are removed.
 - [tpvasconcelos](https://github.com/tpvasconcelos) for fixing `__slots__` handling for objects with `__getattr__`.
-- [devin13cox](https://github.com/devin13cox) for always using t1 path for reporting.
+- [devin13cox](https://github.com/devin13cox) for fixing Delta producing phantom entries when items both move and change values with `iterable_compare_func`.
 - [vitalis89](https://github.com/vitalis89) for fixing `ignore_keys` issue in `detailed__dict__`.
 - [ljames8](https://github.com/ljames8) for fixing logarithmic similarity type hint.
 - [srini047](https://github.com/srini047) for fixing README typo.
