@@ -1,6 +1,6 @@
 # DeepDiff Change log
 
-- v8-7-0
+- v9-0-0
     - migration note:
         - `to_dict()` and `to_json()` now accept a `verbose_level` parameter and always return a usable text-view dict. When the original view is `'tree'`, they default to `verbose_level=2` for full detail. The old `view_override` parameter is removed. To get the previous results, you will need to pass the explicit verbose_level to `to_json` and `to_dict` if you are using the tree view.
     - Dropping support for Python 3.9

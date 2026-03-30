@@ -5,11 +5,12 @@ DeepDiff Module
 
 .. |qluster_link| raw:: html
 
-   <a href="https://getqluster.com"><strong>Qluster</strong></a>
+   <a href="/qluster"><strong>Qluster</strong></a>
 
-DeepDiff is now part of |qluster_link|.
+.. tip::
+    DeepDiff is now part of |qluster_link|.
 
-*If you're building workflows around data validation and correction,* `Qluster <https://getqluster.com>`__ *gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
+    *If you're building workflows around data validation and correction,* `Qluster </qluster>`__ *gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
 
 Deep Difference of dictionaries, iterables, strings and almost any other object.
 It will recursively look for all the changes.

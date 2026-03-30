@@ -7,6 +7,15 @@
 DeepDiff 9.0.0 documentation!
 =============================
 
+.. |qluster_link| raw:: html
+
+   <a href="/qluster"><strong>Qluster</strong></a>
+
+.. admonition:: DeepDiff is now part of |qluster_link|.
+
+    *If you're building workflows around data validation and correction,* `Qluster </qluster>`__ *gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
+
+
 *******
 Modules
 *******
