@@ -1,8 +1,24 @@
 # DeepDiff Change log
 
+- v8-7-0
+    - migration note:
+        - `to_dict()` and `to_json()` now accept a `verbose_level` parameter and always return a usable text-view dict. When the original view is `'tree'`, they default to `verbose_level=2` for full detail. The old `view_override` parameter is removed. To get the previous results, you will need to pass the explicit verbose_level to `to_json` and `to_dict` if you are using the tree view.
+    - Dropping support for Python 3.9
+    - Support for python 3.14
+    - Added support for callable `group_by` thanks to [echan5](https://github.com/echan5)
+    - Added `FlatDeltaDict` TypedDict for `to_flat_dicts` return type
+    - Fixed colored view display when all list items are removed thanks to [yannrouillard](https://github.com/yannrouillard)
+    - Fixed `hasattr()` swallowing `AttributeError` in `__slots__` handling for objects with `__getattr__` thanks to [tpvasconcelos](https://github.com/tpvasconcelos)
+    - Fixed `ignore_order=True` missing int-vs-float type changes
+    - Always use t1 path for reporting thanks to [devin13cox](https://github.com/devin13cox)
+    - Fixed `_convert_oversized_ints` failing on NamedTuples
+    - Fixed orjson `TypeError` for integers exceeding 64-bit range
+    - Fixed parameter bug in `to_flat_dicts` where `include_action_in_path` and `report_type_changes` were not being passed through
+    - Fixed `ignore_keys` issue in `detailed__dict__` thanks to [vitalis89](https://github.com/vitalis89)
+    - Fixed logarithmic similarity type hint thanks to [ljames8](https://github.com/ljames8)
+    - Added `Fraction` numeric support thanks to [akshat62](https://github.com/akshat62)
 - v8-6-2
     - Security fix (CVE-2026-33155): Prevent denial-of-service via crafted pickle payloads that trigger massive memory allocation through the REDUCE opcode. Size-sensitive callables like `bytes()` and `bytearray()` are now wrapped to reject allocations exceeding 128 MB.
-
 - v8-6-1
     - Patched security vulnerability in the Delta class which was vulnerable to class pollution via its constructor, and when combined with a gadget available in DeltaDiff itself, it could lead to Denial of Service and Remote Code Execution (via insecure Pickle deserialization).
 
@@ -21,7 +37,7 @@
     - Added support for memoryview serialization
     - Added support for bytes serialization (non-UTF8 compatible)
     - Fixed bug where group_by with numbers would leak type info into group path reports
-    - Fixed bug in `_get_clean_to_keys_mapping without` explicit significant digits
+    - Fixed bug in `_get_clean_to_keys_mapping` without explicit significant digits
     - Added support for python dict key serialization
     - Enhanced support for IP address serialization with safe module imports
     - Added development tooling improvements (pyright config, .envrc example)
@@ -30,7 +46,7 @@
 - v8-5-0
     - Updating deprecated pydantic calls
     - Switching to pyproject.toml
-    - Fix for moving nested tables when using iterable_compare_func.  by 
+    - Fix for moving nested tables when using iterable_compare_func.
     - Fix recursion depth limit when hashing numpy.datetime64
     - Moving from legacy setuptools use to pyproject.toml
 
@@ -216,7 +232,7 @@
 - v1-0-2: Checking for ImmutableMapping type instead of dict
 - v1-0-1: Better ignore order support
 - v1-0-0: Restructuring output to make it more useful. This is NOT backward compatible.
-- v0-6-1: Fixiing iterables with unhashable when order is ignored
+- v0-6-1: Fixing iterables with unhashable when order is ignored
 - v0-6-0: Adding unicode support
 - v0-5-9: Adding decimal support
 - v0-5-8: Adding ignore order of unhashables support

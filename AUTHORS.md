@@ -34,7 +34,7 @@ Authors in order of the timeline of their contributions:
 - Stian Jensen [stianjensen](https://github.com/stianjensen) for improving ignoring of NoneType in diff 
 - Florian Klien [flowolf](https://github.com/flowolf) for adding math_epsilon
 - Tim Klein [timjklein36](https://github.com/timjklein36) for retaining the order of multiple dictionary items added via Delta.
-- Wilhelm Schürmann[wbsch](https://github.com/wbsch) for fixing the typo with yml files.
+- Wilhelm Schürmann [wbsch](https://github.com/wbsch) for fixing the typo with yml files.
 - [lyz-code](https://github.com/lyz-code) for adding support for regular expressions in DeepSearch and strict_checking feature in DeepSearch.
 - [dtorres-sf](https://github.com/dtorres-sf) for adding the option for custom compare function
 - Tony Wang [Tony-Wang](https://github.com/Tony-Wang) for bugfix: verbose_level==0 should disable values_changes.
@@ -77,3 +77,12 @@ Authors in order of the timeline of their contributions:
 - [Enji Cooper](https://github.com/ngie-eign) for converting legacy setuptools use to pyproject.toml
 - [Diogo Correia](https://github.com/diogotcorreia) for reporting security vulnerability in Delta and DeepDiff that could allow remote code execution.
 - [am-periphery](https://github.com/am-periphery) for reporting CVE-2026-33155: denial-of-service via crafted pickle payloads triggering massive memory allocation.
+- [echan5](https://github.com/echan5) for adding callable `group_by` support.
+- [yannrouillard](https://github.com/yannrouillard) for fixing colored view display when all list items are removed.
+- [tpvasconcelos](https://github.com/tpvasconcelos) for fixing `__slots__` handling for objects with `__getattr__`.
+- [devin13cox](https://github.com/devin13cox) for always using t1 path for reporting.
+- [vitalis89](https://github.com/vitalis89) for fixing `ignore_keys` issue in `detailed__dict__`.
+- [ljames8](https://github.com/ljames8) for fixing logarithmic similarity type hint.
+- [srini047](https://github.com/srini047) for fixing README typo.
+- [Nagato-Yuzuru](https://github.com/Nagato-Yuzuru) for colored view tests.
+- [akshat62](https://github.com/akshat62) for adding Fraction numeric support.

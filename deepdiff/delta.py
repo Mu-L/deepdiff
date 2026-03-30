@@ -1,6 +1,6 @@
 import copy
 import logging
-from typing import List, Dict, IO, Callable, Set, Union, Optional, Any
+from typing import List, Dict, IO, Callable, Set, Union, Optional, Any, cast
 from functools import partial, cmp_to_key
 from collections.abc import Mapping
 from copy import deepcopy
@@ -10,7 +10,7 @@ from deepdiff.helper import (
     strings, numbers,
     np_ndarray, np_array_factory, numpy_dtypes, get_doc,
     not_found, numpy_dtype_string_to_type, dict_,
-    Opcode, FlatDeltaRow, UnkownValueCode, FlatDataAction,
+    Opcode, FlatDeltaRow, FlatDeltaDict, UnkownValueCode, FlatDataAction,
     OPCODE_TAG_TO_FLAT_DATA_ACTION,
     FLAT_DATA_ACTION_TO_OPCODE_TAG,
     SetOrdered,
@@ -551,8 +551,14 @@ class Delta:
             return elements, parent, parent_to_obj_elem, parent_to_obj_action, obj, elem, action
 
     def _do_values_or_type_changed(self, changes, is_type_change=False, verify_changes=True):
+        compare_func_was_used = self.diff.get('_iterable_compare_func_was_used', False)
         for path, value in changes.items():
-            elem_and_details = self._get_elements_and_details(path)
+            # When iterable_compare_func is used, DiffLevel.path() inverts use_t2 for
+            # moved items (see model.py DiffLevel.path). This means dict keys here are
+            # actually t2 paths and new_path holds the t1 path. Apply at t1 so we
+            # don't access indices that don't exist yet or modify the wrong item.
+            apply_path = value['new_path'] if (compare_func_was_used and value.get('new_path')) else path
+            elem_and_details = self._get_elements_and_details(apply_path)
             if elem_and_details:
                 elements, parent, parent_to_obj_elem, parent_to_obj_action, obj, elem, action = elem_and_details
             else:
@@ -1065,7 +1071,7 @@ class Delta:
 
         return result
 
-    def to_flat_dicts(self, include_action_in_path=False, report_type_changes=True) -> List[FlatDeltaRow]:
+    def to_flat_dicts(self, include_action_in_path=False, report_type_changes=True) -> List[FlatDeltaDict]:
         """
         Returns a flat list of actions that is easily machine readable.
 
@@ -1119,9 +1125,9 @@ class Delta:
             attribute_added
             attribute_removed
         """
-        return [
-            i._asdict() for i in self.to_flat_rows(include_action_in_path=False, report_type_changes=True)
-        ]  # type: ignore
+        return cast(List[FlatDeltaDict], [
+            i._asdict() for i in self.to_flat_rows(include_action_in_path=include_action_in_path, report_type_changes=report_type_changes)
+        ])
 
     def to_flat_rows(self, include_action_in_path=False, report_type_changes=True) -> List[FlatDeltaRow]:
         """

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     class DistanceProtocol(DeepDiffProtocol, Protocol):
         hashes: dict
         deephash_parameters: dict
+        ignore_numeric_type_changes: bool
         iterable_compare_func: Optional[Callable]
         math_epsilon: Optional[float]
         cutoff_distance_for_pairs: float
@@ -44,7 +45,7 @@ class DistanceMixin:
         Gives a numeric value for the distance of t1 and t2 based on how many operations are needed to convert
         one to the other.
 
-        This is a similar concept to the Levenshtein Edit Distance but for the structured data and is it is designed
+        This is a similar concept to the Levenshtein Edit Distance but for the structured data and it is designed
         to be between 0 and 1.
 
         A distance of zero means the objects are equal and a distance of 1 is very far.
@@ -86,10 +87,12 @@ class DistanceMixin:
         """
         if not hasattr(self, 'hashes'):
             raise RuntimeError(DISTANCE_CALCS_NEEDS_CACHE)
-        length = DeepHash.get_key(self.hashes, key=item, default=None, extract_index=1)
+        length = DeepHash.get_key(self.hashes, key=item, default=None, extract_index=1,
+                                   ignore_numeric_type_changes=self.ignore_numeric_type_changes)
         if length is None:
             self.__calculate_item_deephash(item)
-            length = DeepHash.get_key(self.hashes, key=item, default=None, extract_index=1)
+            length = DeepHash.get_key(self.hashes, key=item, default=None, extract_index=1,
+                                       ignore_numeric_type_changes=self.ignore_numeric_type_changes)
         return length
 
     def __calculate_item_deephash(self: "DistanceProtocol", item: Any) -> None:
@@ -184,8 +187,10 @@ def _get_item_length(item, parents_ids=frozenset([])):
                     new_subitem[path_] = new_indexes_to_items
                 subitem = new_subitem
 
-            # internal keys such as _numpy_paths should not count towards the distance
-            if isinstance(key, strings) and (key.startswith('_') or key == 'deep_distance' or key == 'new_path'):
+            # internal keys such as _numpy_paths should not count towards the distance.
+            # old_type and old_value are metadata about the previous state, not additional operations.
+            if isinstance(key, strings) and (key.startswith('_') or key == 'deep_distance' or key == 'new_path'
+                                             or key == 'old_type' or key == 'old_value'):
                 continue
 
             item_id = id(subitem)
@@ -268,7 +273,7 @@ def numpy_apply_log_keep_sign(array, offset=MATH_LOG_OFFSET):
     return signed_log_values
 
 
-def logarithmic_similarity(a: NumberType, b: NumberType, threshold: float=0.1) -> float:
+def logarithmic_similarity(a: NumberType, b: NumberType, threshold: float=0.1) -> bool:
     """
     A threshold of 0.1 translates to about 10.5% difference.
     A threshold of 0.5 translates to about 65% difference.

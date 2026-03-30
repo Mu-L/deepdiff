@@ -123,6 +123,74 @@ class TestSerialization:
         ddiff = DeepDiff(t1, t2, verbose_level=verbose_level)
         assert expected == ddiff.to_dict()
 
+    def test_to_dict_tree_view_defaults_to_verbose_level_2(self):
+        t1 = ['a', {1: 1, 3: 4}]
+        t2 = [10, {1: 2, 5: 6}, 'd']
+        ddiff = DeepDiff(t1, t2, view='tree')
+        result = ddiff.to_dict()
+        # tree view defaults to verbose_level=2: added/removed are dicts, not sets
+        expected = {
+            "type_changes": {"root[0]": {"old_type": str, "new_type": int, "old_value": "a", "new_value": 10}},
+            "dictionary_item_added": {"root[1][5]": 6},
+            "dictionary_item_removed": {"root[1][3]": 4},
+            "values_changed": {"root[1][1]": {"new_value": 2, "old_value": 1}},
+            "iterable_item_added": {"root[2]": "d"},
+        }
+        assert expected == result
+
+    @pytest.mark.parametrize('verbose_level, expected', [
+        (0, {"type_changes": {"root[0]": {"old_type": str, "new_type": int}}, "dictionary_item_added": ["root[1][5]"], "dictionary_item_removed": ["root[1][3]"], "iterable_item_added": {"root[2]": "d"}}),
+        (1, {"type_changes": {"root[0]": {"old_type": str, "new_type": int, "old_value": "a", "new_value": 10}}, "dictionary_item_added": ["root[1][5]"], "dictionary_item_removed": ["root[1][3]"], "values_changed": {"root[1][1]": {"new_value": 2, "old_value": 1}}, "iterable_item_added": {"root[2]": "d"}}),
+    ])
+    def test_to_dict_tree_view_with_verbose_level_override(self, verbose_level, expected):
+        t1 = ['a', {1: 1, 3: 4}]
+        t2 = [10, {1: 2, 5: 6}, 'd']
+        ddiff = DeepDiff(t1, t2, view='tree')
+        result = ddiff.to_dict(verbose_level=verbose_level)
+        assert expected == result
+
+    def test_to_dict_text_view_preserves_original_verbose_level(self):
+        t1 = ['a', {1: 1, 3: 4}]
+        t2 = [10, {1: 2, 5: 6}, 'd']
+        # verbose_level=2 at init, text view
+        ddiff = DeepDiff(t1, t2, verbose_level=2)
+        result = ddiff.to_dict()
+        # Should preserve verbose_level=2 from init
+        assert isinstance(result.get("dictionary_item_added"), dict)
+        assert result["dictionary_item_added"] == {"root[1][5]": 6}
+
+    def test_to_dict_text_view_with_verbose_level_override(self):
+        t1 = ['a', {1: 1, 3: 4}]
+        t2 = [10, {1: 2, 5: 6}, 'd']
+        # verbose_level=2 at init, but override to 1 in to_dict
+        ddiff = DeepDiff(t1, t2, verbose_level=2)
+        result = ddiff.to_dict(verbose_level=1)
+        # verbose_level=1: dictionary_item_added is not a dict (it's a SetOrdered)
+        assert not isinstance(result.get("dictionary_item_added"), dict)
+
+    def test_to_dict_invalid_verbose_level(self):
+        t1 = [1]
+        t2 = [2]
+        ddiff = DeepDiff(t1, t2)
+        with pytest.raises(ValueError):
+            ddiff.to_dict(verbose_level=3)
+
+    def test_to_json_with_verbose_level(self):
+        t1 = ['a', {1: 1, 3: 4}]
+        t2 = [10, {1: 2, 5: 6}, 'd']
+        ddiff = DeepDiff(t1, t2, view='tree')
+        result = json.loads(ddiff.to_json())
+        # tree view defaults to verbose_level=2 in to_json too
+        assert "root[1][5]" in result.get("dictionary_item_added", {})
+
+    def test_to_json_with_verbose_level_override(self):
+        t1 = ['a', {1: 1, 3: 4}]
+        t2 = [10, {1: 2, 5: 6}, 'd']
+        ddiff = DeepDiff(t1, t2, view='tree')
+        result = json.loads(ddiff.to_json(verbose_level=1))
+        # verbose_level=1: dictionary_item_added is a list
+        assert isinstance(result.get("dictionary_item_added"), list)
+
     def test_serialize_pydantic_model(self):
         obj = SampleSchema(
             works=True,
@@ -592,6 +660,85 @@ class TestDeepDiffPretty:
         expected_non_utf8_b64 = base64.b64encode(test_data["non_utf8_byte"]).decode('ascii')
         assert expected_non_utf8_b64 in serialized
         assert deserialized["non_utf8_byte"] == expected_non_utf8_b64
+
+    def test_json_dumps_large_int_exceeding_64bit(self):
+        """Test that integers exceeding 64-bit range are serialized as strings.
+        orjson cannot handle integers larger than 64-bit (9223372036854775807),
+        so json_dumps should convert them to strings."""
+        large_int = 59579472846392086780
+        assert large_int > 9223372036854775807  # larger than max int64
+
+        data = {'max_int': large_int, 'min_int': 1336138}
+        serialized = json_dumps(data)
+        back = json_loads(serialized)
+        assert back['max_int'] == str(large_int)
+        assert back['min_int'] == 1336138
+
+    def test_json_dumps_large_int_in_nested_structure(self):
+        """Test large integers in nested data structures are converted to strings."""
+        large_int = 59579472846392086780
+        data = {
+            'stats': {
+                'counter': {'HasInt': 499},
+                'max_int': large_int,
+                'min_int': 1336138,
+            },
+            'name': 'policy_number',
+        }
+        serialized = json_dumps(data)
+        back = json_loads(serialized)
+        assert back['stats']['max_int'] == str(large_int)
+
+    def test_json_dumps_large_negative_int(self):
+        """Test that large negative integers are also converted to strings."""
+        large_neg_int = -59579472846392086780
+        data = {'value': large_neg_int}
+        serialized = json_dumps(data)
+        back = json_loads(serialized)
+        assert back['value'] == str(large_neg_int)
+
+    def test_json_dumps_namedtuple_with_large_int(self):
+        """Test that a NamedTuple containing an oversized int is properly serialized.
+        _convert_oversized_ints must reconstruct the NamedTuple via _fields, not
+        pass a flat list to its constructor (which fails for NamedTuples with
+        required keyword arguments)."""
+        large_int = 59579472846392086780
+        stats = SomeStats(
+            counter=Counter(["a", "b"]),
+            context_aware_counter=Counter(),
+            min_int=0,
+            max_int=large_int,
+        )
+        data = {'stats': stats}
+        serialized = json_dumps(data)
+        back = json_loads(serialized)
+        assert back['stats']['max_int'] == str(large_int)
+        assert back['stats']['min_int'] == 0
+
+    def test_json_dumps_dict_of_namedtuples_with_large_int(self):
+        """Test a dict of NamedTuples where one contains an oversized int.
+        This mirrors the real-world pattern of field stats keyed by column name."""
+        large_int = 59579472846392086780
+        stats_map = {
+            'normal_field': SomeStats(counter=Counter(["x"]), max_int=10),
+            'big_field': SomeStats(counter=Counter(["y"]), max_int=large_int),
+        }
+        serialized = json_dumps(stats_map)
+        back = json_loads(serialized)
+        assert back['normal_field']['max_int'] == 10
+        assert back['big_field']['max_int'] == str(large_int)
+
+    def test_json_dumps_namedtuple_with_large_int_in_list(self):
+        """Test a list of NamedTuples where one has an oversized int."""
+        large_int = 59579472846392086780
+        data = [
+            SomeStats(counter=Counter(), max_int=5),
+            SomeStats(counter=Counter(), max_int=large_int),
+        ]
+        serialized = json_dumps(data)
+        back = json_loads(serialized)
+        assert back[0]['max_int'] == 5
+        assert back[1]['max_int'] == str(large_int)
 
     def test_bytes_in_deepdiff_serialization(self):
         """Test that bytes work correctly in DeepDiff JSON serialization"""

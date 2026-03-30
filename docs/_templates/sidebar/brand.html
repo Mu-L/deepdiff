@@ -1,0 +1,21 @@
+{# Override Furo's sidebar brand so the logo links to getqluster.com #}
+<div class="sidebar-brand{% if logo %} centered{% endif %}">
+  {%- if logo_url %}
+  <a href="https://getqluster.com">
+    <div class="sidebar-logo-container">
+      <img class="sidebar-logo" src="{{ logo_url }}" alt="Logo"/>
+    </div>
+  </a>
+  {%- endif %}
+  {%- if theme_light_logo and theme_dark_logo %}
+  <a href="https://getqluster.com">
+    <div class="sidebar-logo-container">
+      <img class="sidebar-logo only-light" src="{{ pathto('_static/' + theme_light_logo, 1) }}" alt="Light Logo"/>
+      <img class="sidebar-logo only-dark" src="{{ pathto('_static/' + theme_dark_logo, 1) }}" alt="Dark Logo"/>
+    </div>
+  </a>
+  {%- endif %}
+  {% if not theme_sidebar_hide_name %}
+  <a class="sidebar-brand-text" href="{{ pathto(master_doc) }}">{{ docstitle if docstitle else project }}</a>
+  {%- endif %}
+</div>

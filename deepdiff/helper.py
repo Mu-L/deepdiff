@@ -9,10 +9,11 @@ import string
 import time
 import enum
 import ipaddress
-from typing import NamedTuple, Any, List, Optional, Dict, Union, TYPE_CHECKING, Tuple, Iterable, Iterator, Set, FrozenSet, Callable, Pattern, Type, TypeVar, Generic, Literal, overload
+from typing import NamedTuple, Any, List, Optional, Dict, Union, TYPE_CHECKING, Tuple, Iterable, Iterator, Set, FrozenSet, Callable, Pattern, Type, TypeVar, Generic, Literal, overload, TypedDict
 from collections.abc import Mapping, Sequence, Generator
 from ast import literal_eval
 from decimal import Decimal, localcontext, InvalidOperation as InvalidDecimalOperation
+from fractions import Fraction
 from itertools import repeat
 from orderly_set import StableSetEq as SetOrderedBase  # median: 1.0867 s for cache test, 5.63s for all tests
 from threading import Timer
@@ -187,14 +188,14 @@ strings: Tuple[Type[str], Type[bytes], Type[memoryview]] = (str, bytes, memoryvi
 unicode_type = str
 bytes_type = bytes
 only_complex_number: Tuple[Type[Any], ...] = (complex,) + numpy_complex_numbers
-only_numbers: Tuple[Type[Any], ...] = (int, float, complex, Decimal) + numpy_numbers
+only_numbers: Tuple[Type[Any], ...] = (int, float, complex, Decimal, Fraction) + numpy_numbers
 datetimes: Tuple[Type[Any], ...] = (datetime.datetime, datetime.date, datetime.timedelta, datetime.time, np_datetime64)
 ipranges: Tuple[Type[Any], ...] = (ipaddress.IPv4Interface, ipaddress.IPv6Interface, ipaddress.IPv4Network, ipaddress.IPv6Network, ipaddress.IPv4Address, ipaddress.IPv6Address)
 uuids: Tuple[Type[uuid.UUID]] = (uuid.UUID, )
 times: Tuple[Type[Any], ...] = (datetime.datetime, datetime.time, np_datetime64)
 numbers: Tuple[Type[Any], ...] = only_numbers + datetimes
 # Type alias for use in type annotations
-NumberType = Union[int, float, complex, Decimal, datetime.datetime, datetime.date, datetime.timedelta, datetime.time, Any]
+NumberType = Union[int, float, complex, Decimal, Fraction, datetime.datetime, datetime.date, datetime.timedelta, datetime.time, Any]
 booleans: Tuple[Type[bool], Type[Any]] = (bool, np_bool_)
 
 basic_types: Tuple[Type[Any], ...] = strings + numbers + uuids + booleans + (type(None), )
@@ -397,7 +398,7 @@ def type_is_subclass_of_type_group(item: Any, type_group: Tuple[Type[Any], ...])
 
 def get_doc(doc_filename: str) -> str:
     try:
-        with open(os.path.join(current_dir, '../docs/', doc_filename), 'r') as doc_file:
+        with open(os.path.join(current_dir, 'docstrings', doc_filename), 'r') as doc_file:
             doc = doc_file.read()
     except Exception:  # pragma: no cover
         doc = 'Failed to load the docstrings. Please visit: https://zepworks.com/deepdiff/current/'  # pragma: no cover
@@ -433,6 +434,11 @@ def number_to_string(number: Any, significant_digits: int, number_format_notatio
                 # For example '999.99999999' will become '1000.000000' after quantize
                 ctx.prec += 1
                 number = number.quantize(Decimal('0.' + '0' * significant_digits))
+    elif isinstance(number, Fraction):
+        # Convert Fraction to float so that string formatting works on Python < 3.12
+        number = round(float(number), significant_digits)
+        if significant_digits == 0:
+            number = int(number)
     elif isinstance(number, only_complex_number):  # type: ignore
         # Case for complex numbers.
         number = number.__class__(
@@ -496,10 +502,10 @@ def cartesian_product(a: Iterable[Tuple[Any, ...]], b: Iterable[Any]) -> Iterato
 
 def cartesian_product_of_shape(dimentions: Iterable[int], result: Optional[Tuple[Tuple[Any, ...], ...]] = None) -> Iterator[Tuple[Any, ...]]:
     """
-    Cartesian product of a dimentions iterable.
+    Cartesian product of a dimensions iterable.
     This is mainly used to traverse Numpy ndarrays.
 
-    Each array has dimentions that are defines in ndarray.shape
+    Each array has dimensions that are defined in ndarray.shape
     """
     if result is None:
         result = ((),)  # a tuple with an empty tuple
@@ -739,8 +745,8 @@ def detailed__dict__(obj: Any, ignore_private_variables: bool = True, ignore_key
     else:
         result = obj.__dict__.copy()  # A shallow copy
         private_var_prefix = f"_{obj.__class__.__name__}__"  # The semi private variables in Python get this prefix
-        for key in ignore_keys:
-            if key in result or (
+        for key in obj.__dict__:
+            if key in ignore_keys or (
                 ignore_private_variables and key.startswith('__') and not key.startswith(private_var_prefix)
             ):
                 del result[key]
@@ -841,6 +847,23 @@ class FlatDeltaRow(NamedTuple):
     t2_to_index: Optional[int] = None
 
     __repr__ = __str__ = named_tuple_repr
+
+
+class _FlatDeltaDictRequired(TypedDict):
+    path: List
+    action: FlatDataAction
+
+
+class FlatDeltaDict(_FlatDeltaDictRequired, total=False):
+    value: Optional[Any]
+    old_value: Optional[Any]
+    type: Optional[Any]
+    old_type: Optional[Any]
+    new_path: Optional[List]
+    t1_from_index: Optional[int]
+    t1_to_index: Optional[int]
+    t2_from_index: Optional[int]
+    t2_to_index: Optional[int]
 
 
 JSON = Union[Dict[str, str], List[str], List[int], Dict[str, "JSON"], List["JSON"], str, int, float, bool, None]

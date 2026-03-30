@@ -62,6 +62,7 @@ Examples:
    source ~/.venvs/deep/bin/activate && pytest
    ```
 3. **Running module commands without venv**: Commands like `capi run`, `cettings shell`, etc. all require venv to be activated first
+4. **Using `pip` instead of `uv pip`**: This project uses `uv` for package management. Always use `uv pip` instead of `pip`.
 
 
 ### Slow quality checks only to run before creating a build
@@ -101,7 +102,7 @@ nox
 
 ## Development Notes
 
-- **Python Support**: 3.9+ and PyPy3
+- **Python Support**: 3.10+ and PyPy3
 - **Main Branch**: `master` (PRs typically go to `dev` branch)
 - **Build System**: Modern `pyproject.toml` with `flit_core`
 - **Dependencies**: Core dependency is `orderly-set>=5.4.1,<6`

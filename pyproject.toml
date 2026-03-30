@@ -4,11 +4,11 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "deepdiff"
-version = "8.6.2"
+version = "9.0.0"
 dependencies = [
-  "orderly-set>=5.4.1,<6",
+  "orderly-set>=5.5.0,<6",
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
   { name = "Seperman", email = "sep@zepworks.com" }
 ]
@@ -23,11 +23,11 @@ classifiers = [
   "Intended Audience :: Developers",
   "Operating System :: OS Independent",
   "Topic :: Software Development",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: PyPy",
   "Development Status :: 5 - Production/Stable",
   "License :: OSI Approved :: MIT License"
@@ -36,43 +36,46 @@ classifiers = [
 # `dependency-groups` would make this a lot cleaner, in theory.
 [project.optional-dependencies]
 coverage = [
-  "coverage~=7.6.0"
+  "coverage~=7.13.5",
 ]
 cli = [
-  "click~=8.1.0",
-  "pyyaml~=6.0.0"
+  "click~=8.3.1",
+  "pyyaml~=6.0.3"
 ]
 dev = [
-  "bump2version~=1.0.0",
-  "jsonpickle~=4.0.0",
-  "ipdb~=0.13.0",
-  "numpy~=2.2.0; python_version >= '3.10'",
-  "numpy~=2.0; python_version < '3.10'",
-  "python-dateutil~=2.9.0",
-  "orjson~=3.10.0",
-  "tomli~=2.2.0",
+  "bump2version~=1.0.1",
+  "jsonpickle~=4.1.1",
+  "ipdb~=0.13.13",
+  "numpy~=2.4.3; python_version >= '3.14'",
+  "numpy~=2.2.0; python_version < '3.14'",
+  "python-dateutil~=2.9.0.post0",
+  "orjson~=3.11.7",
+  "tomli~=2.4.0",
   "tomli-w~=1.2.0",
-  "pandas~=2.2.0",
-  "polars~=1.21.0",
-  "nox==2025.5.1",
+  "pandas~=3.0.1; python_version >= '3.11'",
+  "pandas~=2.2.0; python_version < '3.11'",
+  "polars~=1.39.3",
+  "nox==2026.2.9",
   "uuid6==2025.0.1",
+  "pytz",
+  "flit-core==3.12.0",
 ]
 docs = [
-  # We use the html style that is not supported in Sphinx 7 anymore.
-  "Sphinx~=6.2.0",
-  "sphinx-sitemap~=2.6.0",
-  "sphinxemoji~=0.3.0"
+  "Sphinx~=8.1.3",
+  "sphinx-sitemap~=2.9.0",
+  "sphinxemoji~=0.3.2",
+  "furo>=2024.8.6",
 ]
 static = [
-  "flake8~=7.1.0",
-  "flake8-pyproject~=1.2.3",
-  "pydantic~=2.10.0",
+  "flake8~=7.3.0",
+  "flake8-pyproject~=1.2.4",
+  "pydantic~=2.12.5",
 ]
 test = [
-  "pytest~=8.3.0",
-  "pytest-benchmark~=5.1.0",
-  "pytest-cov~=6.0.0",
-  "python-dotenv~=1.0.0",
+  "pytest~=9.0.2",
+  "pytest-benchmark~=5.2.3",
+  "pytest-cov~=7.1.0",
+  "python-dotenv~=1.2.2",
 ]
 optimize = [
   "orjson",
@@ -84,8 +87,8 @@ deep = "deepdiff.commands:cli"
 [project.urls]
 Homepage = "https://zepworks.com/deepdiff/"
 Documentation = "https://zepworks.com/deepdiff/"
-Repository = "https://github.com/seperman/deepdiff"
-Issues = "https://github.com/seperman/deepdiff/issues"
+Repository = "https://github.com/qlustered/deepdiff"
+Issues = "https://github.com/qlustered/deepdiff/issues"
 
 [tool.coverage.run]
 branch = true

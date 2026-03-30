@@ -2,14 +2,14 @@
 import logging
 import datetime
 import uuid
-from typing import Union, Optional, Any, List, TYPE_CHECKING, Dict, Tuple, Set, Callable, Iterator, Generator, TypeVar, Protocol
+from typing import Union, Optional, Any, List, TYPE_CHECKING, Dict, Tuple, Set, Callable, Generator
 from collections.abc import Iterable, MutableMapping
 from collections import defaultdict
 from hashlib import sha1, sha256
 from pathlib import Path
 from enum import Enum
 import re
-from deepdiff.helper import (strings, numbers, times, unprocessed, not_hashed, add_to_frozen_set,
+from deepdiff.helper import (strings, numbers, only_numbers, times, unprocessed, not_hashed, add_to_frozen_set,
                              convert_item_or_items_into_set_else_none, get_doc, ipranges,
                              convert_item_or_items_into_compiled_regexes_else_none,
                              get_id, type_is_subclass_of_type_group, type_in_type_group,
@@ -20,8 +20,6 @@ from deepdiff.base import Base
 
 if TYPE_CHECKING:
     from pytz.tzinfo import BaseTzInfo
-    import pandas as pd
-    import polars as pl
     import numpy as np
 
 # Type aliases for better readability
@@ -278,10 +276,34 @@ class DeepHash(Base):
     sha1hex: Callable[[Union[str, bytes]], str] = sha1hex
 
     def __getitem__(self, obj: Any, extract_index: Optional[int] = 0) -> Any:
-        return self._getitem(self.hashes, obj, extract_index=extract_index, use_enum_value=self.use_enum_value)
+        return self._getitem(self.hashes, obj, extract_index=extract_index,
+                             use_enum_value=self.use_enum_value,
+                             ignore_numeric_type_changes=self.ignore_numeric_type_changes)
 
     @staticmethod
-    def _getitem(hashes: Dict[Any, Any], obj: Any, extract_index: Optional[int] = 0, use_enum_value: bool = False) -> Any:
+    def _get_slots_dict(obj: Any) -> Dict[str, Any]:
+        """Get a dict of initialized slot attributes.
+
+        Uses object.__getattribute__ to check each slot directly, bypassing
+        __getattr__. For uninitialized slots on classes that define __getattr__,
+        falls back to getattr — letting it raise if the object is truly broken.
+        """
+        result = {}
+        has_getattr = hasattr(type(obj), '__getattr__')
+        for slot in obj.__slots__:
+            try:
+                result[slot] = object.__getattribute__(obj, slot)
+            except AttributeError:
+                if has_getattr:
+                    # The slot isn't initialized, but the class defines __getattr__.
+                    # Try the normal getattr to let __getattr__ provide a value or
+                    # raise — if it raises, we propagate to fail the strategy.
+                    result[slot] = getattr(obj, slot)
+        return result
+
+    @staticmethod
+    def _getitem(hashes: Dict[Any, Any], obj: Any, extract_index: Optional[int] = 0,
+                 use_enum_value: bool = False, ignore_numeric_type_changes: bool = False) -> Any:
         """
         extract_index is zero for hash and 1 for count and None to get them both.
         To keep it backward compatible, we only get the hash by default so it is set to zero by default.
@@ -294,6 +316,7 @@ class DeepHash(Base):
             key = BoolObj.FALSE
         elif use_enum_value and isinstance(obj, Enum):
             key = obj.value
+        key = DeepHash._make_hash_key_for_lookup(key, ignore_numeric_type_changes=ignore_numeric_type_changes)
 
         result_n_count: Tuple[Any, int] = (None, 0)  # type: ignore
 
@@ -312,9 +335,10 @@ class DeepHash(Base):
         return result_n_count if extract_index is None else result_n_count[extract_index]
 
     def __contains__(self, obj: Any) -> bool:
+        key = self._make_hash_key(obj)
         result = False
         try:
-            result = obj in self.hashes
+            result = key in self.hashes
         except (TypeError, KeyError):
             result = False
         if not result:
@@ -325,22 +349,33 @@ class DeepHash(Base):
         """
         Get method for the hashes dictionary.
         It can extract the hash for a given key that is already calculated when extract_index=0
-        or the count of items that went to building the object whenextract_index=1.
+        or the count of items that went to building the object when extract_index=1.
         """
-        return self.get_key(self.hashes, key, default=default, extract_index=extract_index)
+        return self.get_key(self.hashes, key, default=default, extract_index=extract_index,
+                            ignore_numeric_type_changes=self.ignore_numeric_type_changes)
 
     @staticmethod
-    def get_key(hashes: Dict[Any, Any], key: Any, default: Any = None, extract_index: Optional[int] = 0, use_enum_value: bool = False) -> Any:
+    def get_key(hashes: Dict[Any, Any], key: Any, default: Any = None, extract_index: Optional[int] = 0,
+                use_enum_value: bool = False, ignore_numeric_type_changes: bool = False) -> Any:
         """
         get_key method for the hashes dictionary.
         It can extract the hash for a given key that is already calculated when extract_index=0
-        or the count of items that went to building the object whenextract_index=1.
+        or the count of items that went to building the object when extract_index=1.
         """
         try:
-            result = DeepHash._getitem(hashes, key, extract_index=extract_index, use_enum_value=use_enum_value)
+            result = DeepHash._getitem(hashes, key, extract_index=extract_index,
+                                       use_enum_value=use_enum_value,
+                                       ignore_numeric_type_changes=ignore_numeric_type_changes)
         except KeyError:
             result = default
         return result
+
+    @staticmethod
+    def _unwrap_hash_key(key: Any) -> Any:
+        """Unwrap a (type, value) hash key back to the original value for public API."""
+        if isinstance(key, tuple) and len(key) == 2 and isinstance(key[0], type) and isinstance(key[1], only_numbers):
+            return key[1]
+        return key
 
     def _get_objects_to_hashes_dict(self, extract_index: Optional[int] = 0) -> Dict[Any, Any]:
         """
@@ -350,6 +385,7 @@ class DeepHash(Base):
         """
         result = dict_()
         for key, value in self.hashes.items():
+            key = self._unwrap_hash_key(key)
             if key is UNPROCESSED_KEY:
                 result[key] = value
             else:
@@ -379,13 +415,13 @@ class DeepHash(Base):
         return bool(self.hashes)
 
     def keys(self) -> Any:
-        return self.hashes.keys()
+        return [self._unwrap_hash_key(k) for k in self.hashes.keys()]
 
     def values(self) -> Generator[Any, None, None]:
         return (i[0] for i in self.hashes.values())  # Just grab the item and not its count
 
     def items(self) -> Generator[Tuple[Any, Any], None, None]:
-        return ((i, v[0]) for i, v in self.hashes.items())
+        return ((self._unwrap_hash_key(i), v[0]) for i, v in self.hashes.items())
 
     def _prep_obj(self, obj: Any, parent: str, parents_ids: frozenset = EMPTY_FROZENSET, is_namedtuple: bool = False, is_pydantic_object: bool = False) -> HashTuple:
         """prepping objects"""
@@ -400,7 +436,7 @@ class DeepHash(Base):
             obj_to_dict_strategies.append(lambda o: o.__dict__)
 
         if hasattr(obj, "__slots__"):
-            obj_to_dict_strategies.append(lambda o: {i: getattr(o, i) for i in o.__slots__})
+            obj_to_dict_strategies.append(lambda o: DeepHash._get_slots_dict(o))
         else:
             import inspect
             obj_to_dict_strategies.append(lambda o: dict(inspect.getmembers(o, lambda m: not inspect.isroutine(m))))
@@ -557,6 +593,26 @@ class DeepHash(Base):
             result, counts = self._prep_obj(obj, parent, parents_ids=parents_ids, is_namedtuple=True)
         return result, counts
 
+    def _make_hash_key(self, obj: Any) -> Any:
+        """
+        Create a key for the hashes dict that distinguishes numeric types.
+
+        In Python, 1 == 1.0 and hash(1) == hash(1.0), so int and float values
+        collide as dict keys. When ignore_numeric_type_changes is False, we wrap
+        numeric objects as (type, value) tuples so that each type gets its own
+        cache entry and its own hash.
+        """
+        if not self.ignore_numeric_type_changes and isinstance(obj, only_numbers):
+            return (type(obj), obj)
+        return obj
+
+    @staticmethod
+    def _make_hash_key_for_lookup(obj: Any, ignore_numeric_type_changes: bool = False) -> Any:
+        """Static version of _make_hash_key for use in static accessor methods."""
+        if not ignore_numeric_type_changes and isinstance(obj, only_numbers):
+            return (type(obj), obj)
+        return obj
+
     def _hash(self, obj: Any, parent: str, parents_ids: frozenset = EMPTY_FROZENSET) -> HashTuple:
         """The main hash method"""
         counts = 1
@@ -575,8 +631,9 @@ class DeepHash(Base):
             obj = obj.value
         else:
             result = not_hashed
+        hash_key = self._make_hash_key(obj)
         try:
-            result, counts = self.hashes[obj]
+            result, counts = self.hashes[hash_key]
         except (TypeError, KeyError):
             pass
         else:
@@ -664,7 +721,7 @@ class DeepHash(Base):
         # The hashes will be later used for comparing the objects.
         # Object to hash when possible otherwise ObjectID to hash
         try:
-            self.hashes[obj] = (result, counts)
+            self.hashes[hash_key] = (result, counts)
         except TypeError:
             obj_id = get_id(obj)
             self.hashes[obj_id] = (result, counts)

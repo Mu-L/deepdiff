@@ -64,9 +64,9 @@ author = 'Sep Dehpour'
 # built documents.
 #
 # The short X.Y version.
-version = '8.6.2'
+version = '9.0.0'
 # The full version, including alpha/beta/rc tags.
-release = '8.6.2'
+release = '9.0.0'
 
 load_dotenv(override=True)
 DOC_VERSION = os.environ.get('DOC_VERSION', version)
@@ -105,7 +105,9 @@ exclude_patterns = ['_build']
 #show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+# Let Furo use its default pygments styles (light + dark mode aware)
+pygments_style = 'xcode'
+pygments_dark_style = 'github-dark'
 
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []
@@ -121,34 +123,94 @@ todo_include_todos = False
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'alabaster'
+html_theme = 'furo'
 
-# Theme options are theme-specific and customize the look and feel of a theme
-# further.  For a list of options available for each theme, see the
-# documentation.
 html_theme_options = {
-    'description': 'Get the deep difference of any Python objects.',
-    'show_powered_by': False,
-    'logo': 'logo_long_B1_black.svg',
-    'logo_name': 'Zepworks DeepDiff',
-    'analytics_id': 'UA-59104908-2',
-    'fixed_sidebar': True,
-    'extra_nav_links': {
-        'Zepworks (Blog)': 'https://zepworks.com',
-        'Qluster (Smart ETL)': 'https://qluster.ai',
-        'Github': 'https://github.com/seperman/deepdiff'
+    'footer_icons': [
+        {
+            'name': 'GitHub',
+            'url': 'https://github.com/seperman/deepdiff',
+            'html': '<svg stroke="currentColor" fill="currentColor" stroke-width="0" '
+                    'viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 '
+                    '3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-'
+                    '2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 '
+                    '1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-'
+                    '3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 '
+                    '.67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-'
+                    '.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 '
+                    '3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46'
+                    '.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>',
+            'class': '',
+        },
+    ],
+    'source_repository': 'https://github.com/seperman/deepdiff',
+    'source_branch': 'master',
+    'source_directory': 'docs/',
+    'light_css_variables': {
+        # Fonts
+        'font-stack': "'Open Sans', sans-serif",
+        'font-stack--headings': "'Open Sans', sans-serif",
+        'font-size--normal': '17px',
+        # Body colors (from Alabaster)
+        'color-foreground-primary': '#3E4349',
+        'color-foreground-secondary': '#555',
+        'color-foreground-muted': '#888',
+        'color-background-primary': '#fff',
+        'color-background-secondary': '#f8f8f8',
+        'color-background-border': '#EEE',
+        # Links
+        'color-link': '#004B6B',
+        'color-link--hover': '#6D4100',
+        # Sidebar
+        'color-sidebar-background': '#fff',
+        'color-sidebar-text': '#555',
+        'color-sidebar-link': '#444',
+        'color-sidebar-link-text': '#444',
+        'color-sidebar-link-text--top-level': '#444',
+        'color-sidebar-item-background--hover': '#EEE',
+        'color-sidebar-item-expander-color': '#444',
+        'color-sidebar-caption-text': '#444',
+        'color-sidebar-item-background--current': 'transparent',
+        'color-sidebar-search-border': '#CCC',
+        # Code blocks
+        'color-code-background': '#ecf0f3',
+        'color-code-foreground': '#222',
+        'color-inline-code-background': '#ecf0f3',
+        # Admonitions
+        'color-admonition-background': '#EEE',
+        'color-admonition-title': '#195190',
+        'color-admonition-title-background': 'rgba(25, 81, 144, 0.1)',
+        # Table of contents (right sidebar)
+        'color-toc-item-text': '#444',
+        'color-toc-item-text--hover': '#195190',
+        'color-toc-item-text--active': '#195190',
+        # Headerlink
+        'color-header-text': '#3E4349',
     },
-    'show_relbars': True,
-    # 'github_repo': 'deepdiff',
-    'anchor': '#DDD',
-    'touch_icon': 'logo.svg',
-    'github_button': True,
-    'github_user': 'seperman',
-    'github_count': True,
-    'font_family': 'Open Sans',
-    'canonical_url': 'https://zepworks.com/deepdiff/current/',
-    'page_width': '1024px',
-    'body_max_width': '1024px',
+    'dark_css_variables': {
+        'font-stack': "'Open Sans', sans-serif",
+        'font-stack--headings': "'Open Sans', sans-serif",
+        'font-size--normal': '17px',
+        # Links
+        'color-link': '#7EB8DA',
+        'color-link--hover': '#D4A76A',
+        # Sidebar
+        'color-sidebar-background': '#1a1c1e',
+        'color-sidebar-background-border': '#2d2d2d',
+        'color-sidebar-link-text': '#ccc',
+        'color-sidebar-link-text--top-level': '#ccc',
+        'color-sidebar-caption-text': '#ccc',
+        'color-sidebar-item-background--hover': '#2d2d2d',
+        # Code blocks
+        'color-code-background': '#2b2b2b',
+        'color-inline-code-background': '#2b2b2b',
+        # Admonitions
+        'color-admonition-title': '#7EB8DA',
+        'color-admonition-title-background': 'rgba(126, 184, 218, 0.15)',
+        # TOC
+        'color-toc-item-text--hover': '#7EB8DA',
+        'color-toc-item-text--active': '#7EB8DA',
+    },
 }
 
 # Add any paths that contain custom themes here, relative to this directory.
@@ -163,7 +225,7 @@ html_theme_options = {
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = None
+html_logo = '_static/qluster_grey_on_white_bg_optimized.svg'
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
@@ -174,6 +236,7 @@ html_favicon = "./_static/favicon.ico"
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+html_css_files = ['custom.css']
 
 # Add any extra paths that contain custom files (such as robots.txt or
 # .htaccess) here, relative to this directory. These files are copied

@@ -11,6 +11,7 @@ import datetime  # NOQA
 import decimal  # NOQA
 import orderly_set  # NOQA
 import collections  # NOQA
+import fractions
 import ipaddress
 import base64
 from copy import deepcopy, copy
@@ -24,6 +25,7 @@ from deepdiff.helper import (
     strings,
     get_type,
     TEXT_VIEW,
+    TREE_VIEW,
     np_float32,
     np_float64,
     np_int32,
@@ -79,6 +81,7 @@ SAFE_TO_IMPORT = frozenset({
     'datetime.time',
     'datetime.timedelta',
     'decimal.Decimal',
+    'fractions.Fraction',
     'uuid.UUID',
     'orderly_set.sets.OrderedSet',
     'orderly_set.sets.OrderlySet',
@@ -171,7 +174,7 @@ class SerializationMixin:
         except ImportError:  # pragma: no cover. Json pickle is getting deprecated.
             logger.error('jsonpickle library needs to be installed in order to run from_json_pickle')  # pragma: no cover. Json pickle is getting deprecated.
 
-    def to_json(self, default_mapping: Optional[dict]=None, force_use_builtin_json=False, **kwargs):
+    def to_json(self, default_mapping: Optional[dict]=None, force_use_builtin_json=False, verbose_level: Optional[int]=None, **kwargs):
         """
         Dump json of the text view.
         **Parameters**
@@ -186,6 +189,8 @@ class SerializationMixin:
             When True, we use Python's builtin Json library for serialization,
             even if Orjson is installed.
 
+        verbose_level: int, default=None
+            Override the verbose_level for the serialized output. See to_dict() for details.
 
         kwargs: Any other kwargs you pass will be passed on to Python's json.dumps()
 
@@ -208,7 +213,7 @@ class SerializationMixin:
             >>> ddiff.to_json(default_mapping=default_mapping)
             '{"type_changes": {"root": {"old_type": "A", "new_type": "B", "old_value": "obj A", "new_value": "obj B"}}}'
         """
-        dic = self.to_dict(view_override=TEXT_VIEW)
+        dic = self.to_dict(verbose_level=verbose_level)
         return json_dumps(
             dic,
             default_mapping=default_mapping,
@@ -216,19 +221,27 @@ class SerializationMixin:
             **kwargs,
         )
 
-    def to_dict(self, view_override: Optional[str]=None) -> dict:
+    def to_dict(self, verbose_level: Optional[int]=None) -> dict:
         """
-        convert the result to a python dictionary. You can override the view type by passing view_override.
+        Convert the result to a python dictionary.
 
         **Parameters**
 
-        view_override: view type, default=None,
-            override the view that was used to generate the diff when converting to the dictionary.
-            The options are the text or tree.
+        verbose_level: int, default=None
+            Override the verbose_level for the serialized output.
+            When None, the behavior depends on the original view:
+            - If the original view is 'text', the verbose_level from DeepDiff initialization is used.
+            - If the original view is 'tree', verbose_level=2 is used to provide the most detailed output.
+            Valid values are 0, 1, or 2.
         """
-
-        view = view_override if view_override else self.view  # type: ignore
-        return dict(self._get_view_results(view))  # type: ignore
+        if verbose_level is not None and verbose_level not in {0, 1, 2}:
+            raise ValueError('verbose_level should be 0, 1, or 2.')
+        if verbose_level is None:
+            if self.view == TREE_VIEW:  # type: ignore
+                verbose_level = 2
+            else:
+                verbose_level = self.verbose_level  # type: ignore
+        return dict(self._get_view_results(TEXT_VIEW, verbose_level=verbose_level))  # type: ignore
 
     def _to_delta_dict(
         self,
@@ -635,6 +648,13 @@ def _serialize_decimal(value):
         return float(value)
 
 
+def _serialize_fraction(value):
+    if value.denominator == 1:
+        return value.numerator
+    else:
+        return float(value)
+
+
 def _serialize_tuple(value):
     if hasattr(value, '_asdict'):  # namedtuple
         return value._asdict()
@@ -655,6 +675,7 @@ def _serialize_bytes(value):
 
 JSON_CONVERTOR = {
     decimal.Decimal: _serialize_decimal,
+    fractions.Fraction: _serialize_fraction,
     SetOrdered: list,
     orderly_set.StableSetEq: list,
     set: list,
@@ -769,6 +790,28 @@ def json_dumps(
     ...
 
 
+_INT64_MAX = 9223372036854775807
+_INT64_MIN = -9223372036854775808
+
+
+def _convert_oversized_ints(obj):
+    """Recursively convert integers exceeding 64-bit range to strings.
+    orjson cannot serialize integers outside the signed 64-bit range."""
+    if isinstance(obj, bool):
+        return obj
+    if isinstance(obj, int) and (obj > _INT64_MAX or obj < _INT64_MIN):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {k: _convert_oversized_ints(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        converted = [_convert_oversized_ints(v) for v in obj]
+        if hasattr(obj, '_fields'):
+            # NamedTuple: reconstruct using keyword arguments
+            return type(obj)(**dict(zip(obj._fields, converted)))
+        return type(obj)(converted)
+    return obj
+
+
 def json_dumps(
     item: Any,
     default_mapping:Optional[dict]=None,
@@ -796,10 +839,20 @@ def json_dumps(
                 "orjson does not accept the sort_keys parameter. "
                 "If you need to pass sort_keys, set force_use_builtin_json=True "
                 "to use Python's built-in json library instead of orjson.")
-        result = orjson.dumps(
-            item,
-            default=json_convertor_default(default_mapping=default_mapping),
-            **kwargs)
+        try:
+            result = orjson.dumps(
+                item,
+                default=json_convertor_default(default_mapping=default_mapping),
+                **kwargs)
+        except TypeError as e:
+            if 'Integer exceeds 64-bit range' in str(e):
+                item = _convert_oversized_ints(item)
+                result = orjson.dumps(
+                    item,
+                    default=json_convertor_default(default_mapping=default_mapping),
+                    **kwargs)
+            else:
+                raise
         if return_bytes:
             return result
         return result.decode(encoding='utf-8')
