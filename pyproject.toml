@@ -4,7 +4,7 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "deepdiff"
-version = "8.7.0"
+version = "9.0.0"
 dependencies = [
   "orderly-set>=5.5.0,<6",
 ]
@@ -58,6 +58,7 @@ dev = [
   "nox==2026.2.9",
   "uuid6==2025.0.1",
   "pytz",
+  "flit-core==3.12.0",
 ]
 docs = [
   "Sphinx~=8.1.3",

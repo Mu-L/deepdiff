@@ -16,6 +16,7 @@
     - Fixed parameter bug in `to_flat_dicts` where `include_action_in_path` and `report_type_changes` were not being passed through
     - Fixed `ignore_keys` issue in `detailed__dict__` thanks to [vitalis89](https://github.com/vitalis89)
     - Fixed logarithmic similarity type hint thanks to [ljames8](https://github.com/ljames8)
+    - Added `Fraction` numeric support thanks to [akshat62](https://github.com/akshat62)
 - v8-6-2
     - Security fix (CVE-2026-33155): Prevent denial-of-service via crafted pickle payloads that trigger massive memory allocation through the REDUCE opcode. Size-sensitive callables like `bytes()` and `bytearray()` are now wrapped to reject allocations exceeding 128 MB.
 - v8-6-1

@@ -85,3 +85,4 @@ Authors in order of the timeline of their contributions:
 - [ljames8](https://github.com/ljames8) for fixing logarithmic similarity type hint.
 - [srini047](https://github.com/srini047) for fixing README typo.
 - [Nagato-Yuzuru](https://github.com/Nagato-Yuzuru) for colored view tests.
+- [akshat62](https://github.com/akshat62) for adding Fraction numeric support.
