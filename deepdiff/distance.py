@@ -107,10 +107,13 @@ class DistanceMixin:
     def _precalculate_distance_by_custom_compare_func(
             self: "DistanceProtocol", hashes_added, hashes_removed, t1_hashtable, t2_hashtable, _original_type):
         pre_calced_distances = dict_()
+        if self.iterable_compare_func is None:
+            return pre_calced_distances
+        compare_func = self.iterable_compare_func
         for added_hash in hashes_added:
             for removed_hash in hashes_removed:
                 try:
-                    is_close_distance = self.iterable_compare_func(t2_hashtable[added_hash].item, t1_hashtable[removed_hash].item)
+                    is_close_distance = compare_func(t2_hashtable[added_hash].item, t1_hashtable[removed_hash].item)
                 except CannotCompare:
                     pass
                 else:
@@ -189,8 +192,8 @@ def _get_item_length(item, parents_ids=frozenset([])):
 
             # internal keys such as _numpy_paths should not count towards the distance.
             # old_type and old_value are metadata about the previous state, not additional operations.
-            if isinstance(key, strings) and (key.startswith('_') or key == 'deep_distance' or key == 'new_path'
-                                             or key == 'old_type' or key == 'old_value'):
+            if isinstance(key, str) and (key.startswith('_') or key == 'deep_distance' or key == 'new_path'
+                                         or key == 'old_type' or key == 'old_value'):
                 continue
 
             item_id = id(subitem)
@@ -250,7 +253,7 @@ def _get_numbers_distance(num1, num2, max_=1, use_log_scale=False, log_scale_sim
         return max_  # pragma: no cover
 
 
-def _numpy_div(a, b, replace_inf_with=1):
+def _numpy_div(a, b, replace_inf_with: float=1):
     max_array = np.full(shape=a.shape, fill_value=replace_inf_with, dtype=np_float64)
     result = np.divide(a, b, out=max_array, where=b != 0, dtype=np_float64)
     # wherever 2 numbers are the same, make sure the distance is zero. This is mainly for 0 divided by zero.
@@ -284,15 +287,15 @@ def logarithmic_similarity(a: NumberType, b: NumberType, threshold: float=0.1) -
 
 def logarithmic_distance(a: NumberType, b: NumberType) -> float:
     # Apply logarithm to the absolute values and consider the sign
-    a = float(a)
-    b = float(b)
+    a = float(a)  # type: ignore[arg-type]
+    b = float(b)  # type: ignore[arg-type]
     log_a = math.copysign(math.log(abs(a) + MATH_LOG_OFFSET), a)
     log_b = math.copysign(math.log(abs(b) + MATH_LOG_OFFSET), b)
 
     return abs(log_a - log_b)
 
 
-def _get_numpy_array_distance(num1, num2, max_=1, use_log_scale=False, log_scale_similarity_threshold=0.1):
+def _get_numpy_array_distance(num1, num2, max_: float=1, use_log_scale=False, log_scale_similarity_threshold=0.1):
     """
     Get the distance of 2 numbers. The output is a number between 0 to the max.
     The reason is the

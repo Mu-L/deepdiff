@@ -638,8 +638,8 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         parents_ids: FrozenSet[int]=frozenset([]),
         print_as_attribute: bool=False,
         override: bool=False,
-        override_t1: Optional[Any]=None,
-        override_t2: Optional[Any]=None,
+        override_t1: Any=None,
+        override_t2: Any=None,
         local_tree: Optional[Any]=None,
     ) -> None:
         """Difference of 2 dictionaries"""
@@ -788,14 +788,14 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
 
     def _compare_in_order(
         self, level,
-        t1_from_index=None, t1_to_index=None,
-        t2_from_index=None, t2_to_index=None
+        t1_from_index: Optional[int]=None, t1_to_index: Optional[int]=None,
+        t2_from_index: Optional[int]=None, t2_to_index: Optional[int]=None
     ) -> List[Tuple[Tuple[int, int], Tuple[Any, Any]]]:
         """
         Default compare if `iterable_compare_func` is not provided.
         This will compare in sequence order.
         """
-        if t1_from_index is None:
+        if t1_from_index is None or t2_from_index is None:
             return [((i, i), (x, y)) for i, (x, y) in enumerate(
                 zip_longest(
                     level.t1, level.t2, fillvalue=ListItemRemovedOrAdded))]
@@ -1432,7 +1432,7 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 # When we report repetitions, we want the child_relationship_param2 only if there is no repetition.
                 # Because when there is a repetition, we report it in a different way (iterable_items_added_at_indexes for example).
                 # When there is no repetition, we want child_relationship_param2 so that we report the "new_path" correctly.
-                if other.item is notpresent or len(other.indexes > 1):
+                if other.item is notpresent or len(other.indexes) > 1:
                     index2 = None
                 else:
                     index2 = other.indexes[0]
@@ -1759,7 +1759,7 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
             if self.ignore_uuid_types and isinstance(level.t2, uuids):
                 try:
                     # Convert string to UUID for comparison
-                    t1_uuid = uuid.UUID(level.t1)
+                    t1_uuid = uuid.UUID(str(level.t1))
                     if t1_uuid.int != level.t2.int:
                         self._report_result('values_changed', level, local_tree=local_tree)
                 except (ValueError, AttributeError):

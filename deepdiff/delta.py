@@ -167,7 +167,7 @@ class Delta:
         self.reset()
 
     def __repr__(self):
-        return "<Delta: {}>".format(summarize(self.diff, max_length=100))
+        return "<Delta: {}>".format(summarize(self.diff, max_length=100))  # type: ignore[arg-type]
 
     def reset(self):
         self.post_process_paths_to_convert = dict_()
@@ -289,7 +289,7 @@ class Delta:
                 except IndexError:
                     if elem == len(obj):
                         obj.append(value)
-                    elif self.fill is not not_found and elem > len(obj):
+                    elif self.fill is not not_found and elem is not None and elem > len(obj):
                         while len(obj) < elem:
                             if callable(self.fill):
                                 obj.append(self.fill(obj, value, path_for_err_reporting))
@@ -334,7 +334,7 @@ class Delta:
             # Check if it's a NamedTuple and use _replace() to generate a new copy with the change
             if hasattr(obj, '_fields') and hasattr(obj, '_replace'):
                 if action == GETATTR:
-                    obj = obj._replace(**{elem: new_value})
+                    obj = obj._replace(**{elem: new_value})  # type: ignore[attr-defined]
                     if parent:
                         self._simple_set_elem_value(obj=parent, path_for_err_reporting=path,
                                                     elem=parent_to_obj_elem, value=obj,
@@ -887,7 +887,7 @@ class Delta:
                 for path, op_codes in info.items():
                     r_diff[action][path] = []
                     for op_code in op_codes:
-                        tag = op_code.tag
+                        tag: str = op_code.tag
                         tag = {'delete': 'insert', 'insert': 'delete'}.get(tag, tag)
                         new_op_code = Opcode(
                             tag=tag,

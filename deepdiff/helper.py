@@ -313,7 +313,7 @@ class indexed_set(set):
     """
 
 
-def add_to_frozen_set(parents_ids: FrozenSet[int], item_id: int) -> FrozenSet[int]:
+def add_to_frozen_set(parents_ids: FrozenSet[Any], item_id: Any) -> FrozenSet[Any]:
     return parents_ids | {item_id}
 
 
@@ -386,14 +386,15 @@ def numpy_dtype_string_to_type(dtype_str: str) -> Type[Any]:
     return numpy_dtype_str_to_type[dtype_str]
 
 
-def type_in_type_group(item: Any, type_group: Tuple[Type[Any], ...]) -> bool:
+def type_in_type_group(item: Any, type_group: Iterable[Type[Any]]) -> bool:
     return get_type(item) in type_group
 
 
-def type_is_subclass_of_type_group(item: Any, type_group: Tuple[Type[Any], ...]) -> bool:
-    return isinstance(item, type_group) \
-        or (isinstance(item, type) and issubclass(item, type_group)) \
-        or type_in_type_group(item, type_group)
+def type_is_subclass_of_type_group(item: Any, type_group: Iterable[Type[Any]]) -> bool:
+    type_group_tuple = tuple(type_group)
+    return isinstance(item, type_group_tuple) \
+        or (isinstance(item, type) and issubclass(item, type_group_tuple)) \
+        or type_in_type_group(item, type_group_tuple)
 
 
 def get_doc(doc_filename: str) -> str:

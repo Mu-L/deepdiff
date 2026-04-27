@@ -158,7 +158,7 @@ def _get_nested_obj_and_force(obj, elements, next_element=None):
             except IndexError:
                 if isinstance(obj, list) and isinstance(elem, int) and elem >= len(obj):
                     obj.extend([None] * (elem - len(obj)))
-                    obj.append(_guess_type(elements, elem, index), next_element)
+                    obj.append(_guess_type(elements, elem, index, next_element))
                     obj = obj[-1]
                     prev_obj = _prev_obj
                 elif isinstance(obj, list) and len(obj) == 0 and prev_elem:
@@ -168,7 +168,7 @@ def _get_nested_obj_and_force(obj, elements, next_element=None):
                     if prev_action == GET:
                         prev_obj[prev_elem] = obj
                     else:
-                        setattr(prev_obj, prev_elem, obj)
+                        setattr(prev_obj, str(prev_elem), obj)
                     obj = obj[elem]
         elif action == GETATTR:
             obj = getattr(obj, elem)
