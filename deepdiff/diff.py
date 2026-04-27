@@ -37,15 +37,15 @@ from deepdiff.model import (
     DictRelationship, AttributeRelationship, REPORT_KEYS,
     SubscriptableIterableRelationship, NonSubscriptableIterableRelationship,
     SetRelationship, NumpyArrayRelationship, CUSTOM_FIELD,
-    FORCE_DEFAULT,
+    FORCE_DEFAULT, ChildRelationship,
 )
 from deepdiff.deephash import DeepHash, combine_hashes_lists
 from deepdiff.base import Base
 from deepdiff.lfucache import LFUCache, DummyLFU
 from deepdiff.colored_view import ColoredView
 from deepdiff._multiprocessing import (
-    MPConfig, normalize_mp_config, compute_distances_parallel,
-    compute_hashes_parallel,
+    normalize_mp_config, compute_distances_parallel,
+    compute_hashes_parallel, compute_subtree_diffs_parallel,
 )
 
 if TYPE_CHECKING:
@@ -1474,6 +1474,138 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
             self._distance_cache.set(cache_key, value=pairs)
         return pairs.copy()
 
+    def _subtree_parallel_safe(self):
+        """Return True if paired-subtree diffs in this run can be sent to workers.
+
+        Excluded features are ones whose semantics depend on the *parent's*
+        absolute path or on parent-process state, neither of which is visible
+        in a worker:
+
+        - ``custom_operators`` (per docs/multi_processing.md) can call
+          ``custom_report_result`` and mutate the parent diff instance.
+        - ``exclude_obj_callback`` / ``include_obj_callback`` (and their
+          ``_strict`` variants) receive the level path; in a worker that path
+          is rooted at the subtree, not the original tree, so they would fire
+          on the wrong paths.
+        - ``ignore_order_func`` is also called with the level and would see
+          worker-local paths.
+
+        Path-only filters (``exclude_paths`` / ``include_paths`` /
+        ``exclude_regex_paths``) are handled by re-applying ``_skip_this``
+        after rebasing rather than disabling parallelism.
+        """
+        if self.custom_operators:
+            return False
+        if self.exclude_obj_callback or self.exclude_obj_callback_strict:
+            return False
+        if self.include_obj_callback or self.include_obj_callback_strict:
+            return False
+        if self.ignore_order_func:
+            return False
+        return True
+
+    def _rebase_subtree_leaf(self, leaf, change_level):
+        """Splice a worker-built leaf chain onto the parent's ``change_level``.
+
+        The worker constructed ``leaf`` inside a fresh ``DeepDiff`` whose root
+        DiffLevel holds the paired items themselves; that root is irrelevant
+        once we're back in the parent. We replace it with a *fresh copy* of
+        ``change_level`` (so each leaf gets its own up-chain — DiffLevel.up
+        is shared by reference, and reusing one chain across leaves would
+        scramble paths).
+
+        Returns the rebased leaf. Path caches along the chain are cleared so
+        ``leaf.path()`` recomputes against the new up-chain.
+        """
+        # Walk up to find the worker root (up=None).
+        worker_root = leaf
+        while worker_root.up is not None:
+            worker_root = worker_root.up
+
+        new_cl = change_level.copy()  # fresh, independent chain; new_cl is bottom
+
+        if worker_root is leaf:
+            # The worker reported at the very root of its diff (e.g. the two
+            # paired items differ at the top level — type_changes,
+            # values_changed). Transfer the report payload onto our fresh
+            # change_level copy.
+            new_cl.report_type = leaf.report_type
+            new_cl.additional = leaf.additional
+            cur = new_cl
+            while cur is not None:
+                cur._path = dict_()
+                cur = cur.up
+            return new_cl
+
+        first_under_root = worker_root.down
+        # Splice: new_cl takes worker_root's place. Setting .down auto-sets
+        # the opposite .up link (see DiffLevel.__setattr__).
+        new_cl.down = first_under_root
+        if worker_root.t1_child_rel is not None:
+            new_cl.t1_child_rel = ChildRelationship.create(
+                klass=worker_root.t1_child_rel.__class__,
+                parent=new_cl.t1, child=first_under_root.t1,
+                param=worker_root.t1_child_rel.param,
+            )
+        if worker_root.t2_child_rel is not None:
+            new_cl.t2_child_rel = ChildRelationship.create(
+                klass=worker_root.t2_child_rel.__class__,
+                parent=new_cl.t2, child=first_under_root.t2,
+                param=worker_root.t2_child_rel.param,
+            )
+        # Clear path cache on the entire chain so path() recomputes against
+        # the new up-chain.
+        cur = leaf
+        while cur is not None:
+            cur._path = dict_()
+            cur = cur.up
+        return leaf
+
+    def _dispatch_subtree_jobs(self, pending_jobs, _original_type, local_tree):
+        """Run deferred paired-subtree diffs (parallel when allowed, else serial).
+
+        ``pending_jobs`` is the list of ``(change_level, t1_item, t2_item,
+        parents_ids_added)`` tuples in the exact order the inline serial code
+        would have visited them. Parallel results are merged in that same
+        order regardless of worker completion order, so output is identical
+        to the equivalent serial run.
+        """
+        if not pending_jobs:
+            return
+
+        mp_config = getattr(self, '_mp_config', None)
+        parallel_results = None
+        if (mp_config is not None and mp_config.enabled
+                and mp_config.should_parallelize(len(pending_jobs))):
+            jobs_payload = [(t1_item, t2_item) for (_, t1_item, t2_item, _) in pending_jobs]
+            parallel_results = compute_subtree_diffs_parallel(
+                jobs=jobs_payload,
+                parameters=self._parameters,
+                original_type=_original_type,
+                config=mp_config,
+            )
+
+        if parallel_results is None:
+            # Below threshold or unsafe inputs — run inline-equivalent serial.
+            # Walking pending_jobs in order matches how inline serial would
+            # have run them; the parent tree fills up the same way.
+            for change_level, _t1_item, _t2_item, parents_ids_added in pending_jobs:
+                self._diff(change_level, parents_ids_added, local_tree=local_tree)
+            return
+
+        target_tree = self.tree if local_tree is None else local_tree
+        for (change_level, _t1_item, _t2_item, _parents_ids_added), entries in zip(
+                pending_jobs, parallel_results):
+            for report_type, leaf in entries:
+                rebased_leaf = self._rebase_subtree_leaf(leaf, change_level)
+                # Re-apply path-based filters in the parent — exclude_paths
+                # and friends were not applied correctly inside the worker
+                # because the worker's level paths are subtree-relative.
+                if self._skip_this(rebased_leaf):
+                    continue
+                rebased_leaf.report_type = report_type
+                target_tree[report_type].add(rebased_leaf)
+
     def _diff_iterable_with_deephash(self, level, parents_ids, _original_type=None, local_tree=None):
         """Diff of hashable or unhashable iterables. Only used when ignoring the order."""
 
@@ -1532,6 +1664,18 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 other = hashtable[other]
             return other
 
+        # Phase 3: paired-subtree diffs may be deferred so they can run in a
+        # worker pool. ``pending_subtree_jobs is None`` keeps the inline
+        # serial path (and the existing ordering of inline ``_diff`` calls
+        # vs. ``_report_result`` calls) — so any feature that disables
+        # subtree parallelism degrades cleanly to today's behavior.
+        mp_config = getattr(self, '_mp_config', None)
+        use_mp = (
+            mp_config is not None and mp_config.enabled
+            and self._subtree_parallel_safe()
+        )
+        pending_subtree_jobs = [] if use_mp else None
+
         if self.report_repetition:
             for hash_value in hashes_added:
                 if self._count_diff() is StopIteration:
@@ -1558,7 +1702,11 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                         self._report_result('iterable_item_added', change_level, local_tree=local_tree)
                     else:
                         parents_ids_added = add_to_frozen_set(parents_ids, item_id)
-                        self._diff(change_level, parents_ids_added, local_tree=local_tree)
+                        if pending_subtree_jobs is None:
+                            self._diff(change_level, parents_ids_added, local_tree=local_tree)
+                        else:
+                            pending_subtree_jobs.append(
+                                (change_level, other.item, t2_hashtable[hash_value].item, parents_ids_added))
             for hash_value in hashes_removed:
                 if self._count_diff() is StopIteration:
                     return  # pragma: no cover. This is already covered for addition.
@@ -1586,7 +1734,11 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                         # getting resolved above in the hashes_added calcs. However I am leaving these 2 lines
                         # in case things change in future.
                         parents_ids_added = add_to_frozen_set(parents_ids, item_id)  # pragma: no cover.
-                        self._diff(change_level, parents_ids_added, local_tree=local_tree)  # pragma: no cover.
+                        if pending_subtree_jobs is None:  # pragma: no cover.
+                            self._diff(change_level, parents_ids_added, local_tree=local_tree)
+                        else:  # pragma: no cover.
+                            pending_subtree_jobs.append(
+                                (change_level, t1_hashtable[hash_value].item, other.item, parents_ids_added))
 
             items_intersect = t2_hashes.intersection(t1_hashes)
 
@@ -1630,7 +1782,11 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                     self._report_result('iterable_item_added', change_level, local_tree=local_tree)
                 else:
                     parents_ids_added = add_to_frozen_set(parents_ids, item_id)
-                    self._diff(change_level, parents_ids_added, local_tree=local_tree)
+                    if pending_subtree_jobs is None:
+                        self._diff(change_level, parents_ids_added, local_tree=local_tree)
+                    else:
+                        pending_subtree_jobs.append(
+                            (change_level, other.item, t2_hashtable[hash_value].item, parents_ids_added))
 
             for hash_value in hashes_removed:
                 if self._count_diff() is StopIteration:
@@ -1652,7 +1808,14 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                     # Just like the case when report_repetition = True, these lines never run currently.
                     # However they will stay here in case things change in future.
                     parents_ids_added = add_to_frozen_set(parents_ids, item_id)  # pragma: no cover.
-                    self._diff(change_level, parents_ids_added, local_tree=local_tree)  # pragma: no cover.
+                    if pending_subtree_jobs is None:  # pragma: no cover.
+                        self._diff(change_level, parents_ids_added, local_tree=local_tree)
+                    else:  # pragma: no cover.
+                        pending_subtree_jobs.append(
+                            (change_level, t1_hashtable[hash_value].item, other.item, parents_ids_added))
+
+        if pending_subtree_jobs:
+            self._dispatch_subtree_jobs(pending_subtree_jobs, _original_type, local_tree)
 
     def _diff_booleans(self, level, local_tree=None):
         if level.t1 != level.t2:

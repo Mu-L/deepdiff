@@ -12,7 +12,28 @@ the parent so cross-process id-keyed sub-object cache entries do not need to
 travel back. Unsafe inputs (unpickleable hasher / params, generators without
 `__len__`) fall back to serial.
 
-Subtickets #4, #5, #6 (extended matrix), and #7 are still open.
+**Phase 3 — landed (2026-04-27).** Subticket #4 (parallel paired-subtree diffs)
+is implemented for the `ignore_order=True` hot path. After
+`_get_most_in_common_pairs_in_iterables` decides pairs, each paired
+`_diff(change_level, ...)` call inside `_diff_iterable_with_deephash` is
+deferred into a job queue. When the queue is above threshold and the run is
+"subtree-safe" (no `custom_operators`, no `*_obj_callback*`, no
+`ignore_order_func`), a `ProcessPoolExecutor` runs them in workers; otherwise
+the deferred jobs run inline-equivalent in the parent. Each worker returns the
+leaves of its subtree-local `TreeResult`; the parent splices each leaf's
+up-chain onto a fresh copy of the original `change_level` so paths come out
+identical to the inline serial run, then re-applies `_skip_this` to honor
+`exclude_paths` / `include_paths` / `exclude_regex_paths` (which the worker
+could not enforce because its level paths are subtree-relative).
+
+A small but load-bearing fix landed alongside this: `NotPresent`,
+`Unprocessed`, `Skipped`, and `NotHashed` in `deepdiff/helper.py` now define
+`__reduce__` so unpickling resolves back to the parent process's singleton.
+Without this, identity checks like `change.t2 is not notpresent` (used by
+`TextResult._from_tree_default` to decide t1-vs-t2 reporting) break on any
+DiffLevel that travels through `pickle`, which is exactly the Phase 3 path.
+
+Subtickets #5, #6 (extended matrix), and #7 are still open.
 
 What works today:
 
@@ -33,17 +54,21 @@ What works today:
 - Picklability of the parameters dict, the iterable compare func, and a
   representative job is checked up front. Any failure causes a clean serial
   fallback rather than an opaque worker crash.
-- 23 determinism / fallback tests in `tests/test_multiprocessing.py` (10x
-  serial-vs-parallel comparison, tied distances, repeated items in both
-  `report_repetition` modes, sets, exclude_paths, ignore_string_case, custom
-  module-level hasher, lambda compare-func fallback, recursive-no-nesting).
-  All 1149 existing tests still pass.
+- Phase 3 adds 9 more determinism / fallback tests in
+  `tests/test_multiprocessing.py` (paired-subtree determinism across nested
+  dicts, multiple changes per pair, dict_item add/remove, type changes,
+  `report_repetition=True`, `exclude_paths` re-filter, `custom_operators`
+  fallback, `exclude_obj_callback` fallback, plus direct unit tests for
+  `compute_subtree_diffs_parallel`). All other test files still pass
+  unchanged.
 
 Code locations:
 
 - `deepdiff/_multiprocessing.py` — `MPConfig`, `normalize_mp_config`,
-  `is_pickleable`, `_distance_worker` and `_hash_worker` (module-level for
-  `spawn`), `compute_distances_parallel`, `compute_hashes_parallel`.
+  `is_pickleable`, `_distance_worker` / `_hash_worker` /
+  `_subtree_diff_worker` (module-level for `spawn`),
+  `compute_distances_parallel`, `compute_hashes_parallel`,
+  `compute_subtree_diffs_parallel`.
 - `deepdiff/diff.py::DeepDiff.__init__` — three new parameters, normalized into
   `self._mp_config`, propagated through `_parameters`.
 - `deepdiff/diff.py::DeepDiff._maybe_compute_pair_distances_parallel` — the
@@ -55,6 +80,15 @@ Code locations:
 - `deepdiff/diff.py::DeepDiff._create_hashtable` — gains a parallel
   pre-pass that fills per-index item hashes; serial body unchanged for
   the fallback path.
+- `deepdiff/diff.py::DeepDiff._diff_iterable_with_deephash` — paired
+  `_diff` calls are deferred into a job queue; the queue is dispatched at
+  the end of the function via `_dispatch_subtree_jobs`.
+- `deepdiff/diff.py::DeepDiff._subtree_parallel_safe`,
+  `_rebase_subtree_leaf`, `_dispatch_subtree_jobs` — Phase 3 helpers that
+  gate, splice, and merge subtree diff results.
+- `deepdiff/helper.py` — `NotPresent` / `Unprocessed` / `Skipped` /
+  `NotHashed` gained `__reduce__` so the singleton sentinels survive
+  `spawn`-based pickle round-trips.
 
 Not yet implemented (deferred, intentional):
 
@@ -63,8 +97,14 @@ Not yet implemented (deferred, intentional):
   Phase 2; the deeper recursion levels remain serial for now because their
   identity-after-pickle and cross-call cache reuse risks are not yet covered
   by tests.
-- **Subticket #4** — subtree diff parallelism after pairing. `DiffLevel`
-  pickling and custom-operator interaction require dedicated work.
+- **Subticket #4 (partial)** — `_diff_dict` shared-key child diffs and the
+  ordered `_diff_by_forming_pairs_and_comparing_one_by_one` path are still
+  serial. The Phase 3 splice helper assumes paths come from a single
+  `branch_deeper` call (the paired `change_level`); extending it to dict
+  shared keys and sequence pairs is straightforward but adds surface area
+  the current tests don't cover. Worker-side `_iterable_opcodes` are also
+  not propagated, so `DELTA_VIEW` of a paired subtree containing ordered
+  iterables is not yet covered by Phase 3.
 - **Subticket #5** — multiprocessing-aware stats semantics. Parent-only stats
   remain meaningful in Phase 1, but no aggregation across workers.
 - **Subticket #6** — extended test matrix (numpy, pydantic, namedtuple, group_by,

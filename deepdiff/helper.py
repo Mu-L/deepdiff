@@ -239,16 +239,42 @@ class OtherTypes:
     __str__ = __repr__
 
 
+# Sentinels below carry meaning by *identity*, not equality — e.g.
+# ``change.t2 is not notpresent`` in TextResult selects t2-vs-t1 reporting.
+# Pickle, however, makes a fresh instance on unpickle, which would silently
+# break those identity checks across process boundaries (multiprocessing).
+# ``__reduce__`` rewires unpickle to return the parent process's singleton,
+# preserving ``is`` semantics under spawn-based multiprocessing.
+
+def _resolve_skipped():
+    return skipped
+
+
+def _resolve_unprocessed():
+    return unprocessed
+
+
+def _resolve_not_hashed():
+    return not_hashed
+
+
+def _resolve_notpresent():
+    return notpresent
+
+
 class Skipped(OtherTypes):
-    pass
+    def __reduce__(self):
+        return (_resolve_skipped, ())
 
 
 class Unprocessed(OtherTypes):
-    pass
+    def __reduce__(self):
+        return (_resolve_unprocessed, ())
 
 
 class NotHashed(OtherTypes):
-    pass
+    def __reduce__(self):
+        return (_resolve_not_hashed, ())
 
 
 class NotPresent:  # pragma: no cover
@@ -257,6 +283,9 @@ class NotPresent:  # pragma: no cover
     in the future.
     We previously used None for this but this caused problem when users actually added and removed None. Srsly guys? :D
     """
+
+    def __reduce__(self):
+        return (_resolve_notpresent, ())
 
     def __repr__(self) -> str:
         return 'not present'  # pragma: no cover

@@ -254,6 +254,96 @@ def _hash_worker(job: Tuple[int, Any, str, Dict[str, Any]]) -> Tuple[int, Option
     return job_index, item_hash
 
 
+def _subtree_diff_worker(
+    job: Tuple[int, Dict[str, Any], Any, Any, Any],
+) -> Tuple[int, List[Tuple[str, Any]]]:
+    """Run one paired-item subtree diff in a worker process.
+
+    ``job`` layout: ``(job_index, sanitized_parameters, t1, t2, _original_type)``.
+    The worker constructs a fresh root ``DeepDiff`` (no shared parent state),
+    requests the TREE_VIEW so ``self.tree`` is populated and walks it once to
+    flatten the leaves into ``[(report_type, leaf_difflevel), ...]``.
+
+    The parent rebases each leaf's up-chain onto its own ``change_level`` so
+    paths come out as if the diff had run inline. Returning bare DiffLevel
+    objects is acceptable here because we already proved they pickle and
+    re-attach cleanly (see tests/test_multiprocessing.py).
+    """
+    # Imported here to keep module import cheap and to dodge any circular
+    # import surprises under spawn.
+    from deepdiff.diff import DeepDiff
+    from deepdiff.helper import TREE_VIEW
+
+    job_index, parameters, t1, t2, _original_type = job
+    diff = DeepDiff(
+        t1, t2,
+        _parameters=parameters,
+        view=TREE_VIEW,
+        _original_type=_original_type,
+        # Keep cache+tree alive past __init__ so the post-walk below sees the
+        # populated tree (cache_purge_level mirrors what _distance_worker uses).
+        cache_purge_level=0,
+    )
+    entries: List[Tuple[str, Any]] = []
+    for report_type, levels in diff.tree.items():
+        if report_type == 'deep_distance':
+            continue
+        for leaf in levels:
+            entries.append((report_type, leaf))
+    return job_index, entries
+
+
+def compute_subtree_diffs_parallel(
+    jobs: List[Tuple[Any, Any]],
+    parameters: Dict[str, Any],
+    original_type: Any,
+    config: MPConfig,
+) -> Optional[List[List[Tuple[str, Any]]]]:
+    """Run ``_subtree_diff_worker`` over ``jobs`` and return per-job entries.
+
+    ``jobs`` is a list of ``(t1_item, t2_item)`` tuples in the exact order
+    the serial paired-iteration code visits them. Returns a list aligned to
+    that order; each element is ``[(report_type, leaf_difflevel), ...]``
+    suitable for the parent to rebase and merge into its tree. Returns
+    ``None`` when the section is unsafe to parallelize (unpickleable
+    parameters/items, worker import error). On ``None`` the caller MUST run
+    the same jobs serially so correctness is preserved.
+
+    Workers may finish out of order; results are collected by their original
+    job index so the merge order is identical regardless of completion order.
+    """
+    if not jobs:
+        return []
+
+    sanitized_params = _sanitize_parameters_for_worker(parameters)
+
+    if not is_pickleable(sanitized_params):
+        return None
+    # Sample-pickle the first job; cheap shield against the common
+    # "lambda in custom_operators" / unpickleable item failure.
+    if not is_pickleable(jobs[0]):
+        return None
+
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    payloads = [
+        (i, sanitized_params, t1_item, t2_item, original_type)
+        for i, (t1_item, t2_item) in enumerate(jobs)
+    ]
+
+    results_by_index: Dict[int, List[Tuple[str, Any]]] = {}
+    try:
+        with ProcessPoolExecutor(max_workers=config.workers) as executor:
+            futures = [executor.submit(_subtree_diff_worker, payload) for payload in payloads]
+            for future in as_completed(futures):
+                idx, entries = future.result()
+                results_by_index[idx] = entries
+    except (pickle.PicklingError, AttributeError, TypeError):
+        return None
+
+    return [results_by_index[i] for i in range(len(jobs))]
+
+
 def compute_hashes_parallel(
     jobs: List[Tuple[Any, str]],
     deephash_parameters: Dict[str, Any],

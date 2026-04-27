@@ -20,6 +20,7 @@ from deepdiff._multiprocessing import (
     is_pickleable,
     compute_distances_parallel,
     compute_hashes_parallel,
+    compute_subtree_diffs_parallel,
 )
 
 
@@ -325,3 +326,150 @@ class TestHashesParallelHelper:
             jobs=jobs, deephash_parameters={}, config=cfg
         )
         assert again == result
+
+
+# Module-level callables/classes so they pickle cleanly under spawn.
+def _drop_secret_callback(obj, path):
+    # Mirrors a real-world exclude_obj_callback that inspects the path.
+    return "secret" in path
+
+
+from deepdiff.operator import BaseOperator  # noqa: E402
+
+
+class _NoopOperator(BaseOperator):
+    # No types/regex_paths configured, so match() never fires — but its mere
+    # presence in custom_operators must force the parent to keep subtree
+    # diffs serial (the worker would not be able to run custom_report_result
+    # back into the parent's tree).
+    def __init__(self):
+        super().__init__()
+
+    def give_up_diffing(self, level, diff_instance):
+        return False
+
+    def normalize_value_for_hashing(self, parent, obj):
+        # Required for ignore_order=True compatibility when this operator
+        # ships through DeepHash. We don't normalize anything — pass through.
+        return obj
+
+
+class TestSubtreeParallel:
+    """Phase 3: paired-subtree diffs run in worker processes after pairing.
+
+    Workers compute a fresh DeepDiff per pair and return tree leaves; the
+    parent rebases each leaf's up-chain onto its own ``change_level``. The
+    public output must equal the equivalent serial run regardless of worker
+    completion order, and unsafe inputs (custom_operators, path-aware
+    callbacks) must fall back to inline serial.
+    """
+
+    def _assert_determinism(self, t1, t2, **kwargs):
+        kwargs.setdefault("ignore_order", True)
+        kwargs.setdefault("cutoff_intersection_for_pairs", 1)
+        serial = DeepDiff(t1, t2, **kwargs)
+        for _ in range(REPEATS):
+            parallel = _run_parallel(t1, t2, **kwargs)
+            assert parallel == serial, (
+                "parallel != serial after run; difference: %r vs %r"
+                % (parallel, serial)
+            )
+
+    def test_paired_subtree_changes_match_serial(self):
+        # Each pair has exactly one nested change. Rebased paths must match
+        # the inline serial paths character-for-character.
+        t1 = [{"id": i, "data": {"x": i, "y": [i, i + 1]}} for i in range(20)]
+        t2 = [{"id": i, "data": {"x": i, "y": [i, i + 2]}} for i in range(20)]
+        self._assert_determinism(t1, t2)
+
+    def test_paired_subtree_multiple_changes_per_pair(self):
+        # Multiple values_changed entries per pair — verifies that each leaf
+        # in the worker's tree gets an independent rebased up-chain.
+        t1 = [{"a": i, "b": i * 2, "c": i * 3, "d": [i, i, i]} for i in range(15)]
+        t2 = [{"a": i + 100, "b": i * 2, "c": i * 3 + 1, "d": [i, i, i + 1]} for i in range(15)]
+        self._assert_determinism(t1, t2)
+
+    def test_paired_subtree_with_added_and_removed_keys(self):
+        # Non-values_changed report types in the subtree:
+        # dictionary_item_added / dictionary_item_removed.
+        t1 = [{"id": i, "old_only": i} for i in range(12)]
+        t2 = [{"id": i, "new_only": i} for i in range(12)]
+        self._assert_determinism(t1, t2)
+
+    def test_paired_subtree_with_type_changes(self):
+        t1 = [{"id": i, "v": i} for i in range(10)]
+        t2 = [{"id": i, "v": str(i)} for i in range(10)]
+        self._assert_determinism(t1, t2)
+
+    def test_paired_subtree_report_repetition_true(self):
+        # Exercises the report_repetition=True branch where the inner _diff
+        # is also deferred to workers.
+        t1 = [{"k": i % 3, "extra": [i]} for i in range(20)]
+        t2 = [{"k": (i + 1) % 3, "extra": [i + 1]} for i in range(20)]
+        self._assert_determinism(t1, t2, report_repetition=True)
+
+    def test_exclude_paths_re_applied_in_parent(self):
+        # Worker sees subtree-relative paths, so exclude_paths cannot be
+        # enforced inside the worker; the parent re-filters via _skip_this
+        # after rebasing. This test would fail if that re-filter was missing.
+        t1 = [{"id": i, "secret": i * 100, "v": i} for i in range(15)]
+        t2 = [{"id": i, "secret": i * 999, "v": i + (1 if i == 7 else 0)} for i in range(15)]
+        self._assert_determinism(
+            t1, t2, exclude_paths=["root[0]['secret']"],
+        )
+
+
+class TestSubtreeFallback:
+    """Subtree parallelism must degrade cleanly when features can't ship to workers."""
+
+    def test_custom_operators_force_serial(self):
+        # custom_operators can call custom_report_result and mutate the
+        # parent diff — they must not run in workers. Even with mp turned on
+        # the result must still match the serial run.
+        op = _NoopOperator()
+        t1 = [{"id": i, "v": i} for i in range(20)]
+        t2 = [{"id": i, "v": i + (1 if i == 5 else 0)} for i in range(20)]
+        serial = DeepDiff(t1, t2, ignore_order=True, custom_operators=[op])
+        parallel = _run_parallel(
+            t1, t2, ignore_order=True, custom_operators=[op],
+        )
+        assert parallel == serial
+
+    def test_exclude_obj_callback_forces_serial(self):
+        # exclude_obj_callback receives the level path; in a worker the path
+        # is subtree-relative, so the callback would fire on the wrong paths.
+        # The parent must keep this case serial.
+        t1 = [{"id": i, "secret": i, "v": i} for i in range(15)]
+        t2 = [{"id": i, "secret": i, "v": i + (1 if i == 3 else 0)} for i in range(15)]
+        serial = DeepDiff(
+            t1, t2, ignore_order=True,
+            exclude_obj_callback=_drop_secret_callback,
+        )
+        parallel = _run_parallel(
+            t1, t2, ignore_order=True,
+            exclude_obj_callback=_drop_secret_callback,
+        )
+        assert parallel == serial
+
+
+class TestSubtreeParallelHelper:
+    """Direct unit tests for ``compute_subtree_diffs_parallel``."""
+
+    def test_empty_jobs_returns_empty_list(self):
+        cfg = MPConfig(enabled=True, workers=2, threshold=0)
+        result = compute_subtree_diffs_parallel(
+            jobs=[], parameters={}, original_type=None, config=cfg,
+        )
+        assert result == []
+
+    def test_unpickleable_parameters_returns_none(self):
+        cfg = MPConfig(enabled=True, workers=2, threshold=0)
+        # A lambda in parameters cannot be pickled under spawn.
+        params = {"some_param": lambda x: x}
+        result = compute_subtree_diffs_parallel(
+            jobs=[({"x": 1}, {"x": 2})],
+            parameters=params,
+            original_type=None,
+            config=cfg,
+        )
+        assert result is None
