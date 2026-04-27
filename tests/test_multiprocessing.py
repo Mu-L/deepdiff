@@ -19,6 +19,7 @@ from deepdiff._multiprocessing import (
     normalize_mp_config,
     is_pickleable,
     compute_distances_parallel,
+    compute_hashes_parallel,
 )
 
 
@@ -203,3 +204,124 @@ class TestRecursiveNoNesting:
 def _simple_hasher(obj, *args, **kwargs):
     import hashlib
     return hashlib.sha1(repr(obj).encode("utf-8")).hexdigest()
+
+
+class TestHashtableParallel:
+    """Phase 2: ``_create_hashtable`` per-item DeepHash parallelism.
+
+    These exercise the parallel hashing path with ``multiprocessing_threshold=0``
+    so even small fixtures hit the worker pool. Result must match the equivalent
+    serial run, repeatedly, regardless of worker completion order.
+    """
+
+    def _assert_determinism(self, t1, t2, **kwargs):
+        kwargs.setdefault("ignore_order", True)
+        kwargs.setdefault("cutoff_intersection_for_pairs", 1)
+        serial = DeepDiff(t1, t2, **kwargs)
+        for _ in range(REPEATS):
+            parallel = _run_parallel(t1, t2, **kwargs)
+            assert parallel == serial, (
+                "parallel != serial after run; difference: %r vs %r"
+                % (parallel, serial)
+            )
+
+    def test_large_list_of_dicts(self):
+        # Bigger N so spawn cost is not pathological; results must still match.
+        t1 = [{"i": i, "name": "item-%d" % i, "tags": [i, i + 1]} for i in range(40)]
+        t2 = [{"i": i, "name": "item-%d" % i, "tags": [i, i + 1]} for i in range(40)]
+        # Add a single change deep in the middle
+        t2[17]["name"] = "changed"
+        self._assert_determinism(t1, t2)
+
+    def test_list_of_lists(self):
+        t1 = [[i, i + 1, i + 2] for i in range(15)]
+        t2 = [[i, i + 1, i + 2] for i in range(15)]
+        t2[5] = [99, 100, 101]
+        self._assert_determinism(t1, t2)
+
+    def test_set_of_hashables(self):
+        t1 = set(range(30))
+        t2 = set(range(30))
+        t2.discard(7)
+        t2.add(99)
+        self._assert_determinism(t1, t2)
+
+    def test_repeated_items_report_repetition_false(self):
+        # Repeated items: cache reuse path. Parent merges per-index hashes
+        # in serial order so duplicates collapse the same way.
+        t1 = [{"k": i % 3} for i in range(20)]
+        t2 = [{"k": (i + 1) % 3} for i in range(20)]
+        self._assert_determinism(t1, t2, report_repetition=False)
+
+    def test_repeated_items_report_repetition_true(self):
+        t1 = [{"k": i % 3} for i in range(20)]
+        t2 = [{"k": (i + 1) % 3} for i in range(20)]
+        self._assert_determinism(t1, t2, report_repetition=True)
+
+    def test_nested_mixed_structures(self):
+        t1 = [
+            {"id": i, "data": {"vals": [j for j in range(i)], "meta": {"k": i}}}
+            for i in range(12)
+        ]
+        t2 = [
+            {"id": i, "data": {"vals": [j for j in range(i)], "meta": {"k": i + (1 if i == 6 else 0)}}}
+            for i in range(12)
+        ]
+        self._assert_determinism(t1, t2)
+
+    def test_below_threshold_uses_serial(self):
+        # Default threshold is 64; small inputs without the override stay serial.
+        t1 = [1, 2, 3]
+        t2 = [3, 2, 1]
+        # No multiprocessing_threshold=0 override here on purpose.
+        out = DeepDiff(t1, t2, ignore_order=True, multiprocessing=True)
+        assert out == DeepDiff(t1, t2, ignore_order=True)
+
+    def test_unpickleable_hasher_falls_back(self):
+        # A lambda hasher is not pickleable. Must not crash; result must match
+        # the serial run.
+        bad_hasher = lambda obj: _simple_hasher(obj)  # noqa: E731
+        t1 = [{"x": i} for i in range(10)]
+        t2 = [{"x": i + (1 if i == 3 else 0)} for i in range(10)]
+        serial = DeepDiff(t1, t2, ignore_order=True, hasher=bad_hasher)
+        parallel = _run_parallel(t1, t2, ignore_order=True, hasher=bad_hasher)
+        assert parallel == serial
+
+
+class TestHashesParallelHelper:
+    """Direct unit tests for ``compute_hashes_parallel``."""
+
+    def test_empty_jobs_returns_empty_list(self):
+        cfg = MPConfig(enabled=True, workers=2, threshold=0)
+        assert compute_hashes_parallel(jobs=[], deephash_parameters={}, config=cfg) == []
+
+    def test_unpickleable_params_returns_none(self):
+        cfg = MPConfig(enabled=True, workers=2, threshold=0)
+        # A lambda inside the params dict cannot be pickled under spawn.
+        params = {"hasher": lambda obj: "x"}
+        result = compute_hashes_parallel(
+            jobs=[(1, "root[0]"), (2, "root[1]")],
+            deephash_parameters=params,
+            config=cfg,
+        )
+        assert result is None
+
+    def test_returns_one_hash_per_item_in_index_order(self):
+        cfg = MPConfig(enabled=True, workers=2, threshold=0)
+        jobs = [(i, "root[%d]" % i) for i in range(5)]
+        # Minimal deephash params — keep keys aligned with what DeepDiff
+        # would normally pass. An empty dict is sufficient for primitives.
+        result = compute_hashes_parallel(
+            jobs=jobs,
+            deephash_parameters={},
+            config=cfg,
+        )
+        assert result is not None
+        assert len(result) == 5
+        # All entries are non-None for primitives.
+        assert all(h is not None for h in result)
+        # Same int hashed twice yields identical hashes.
+        again = compute_hashes_parallel(
+            jobs=jobs, deephash_parameters={}, config=cfg
+        )
+        assert again == result

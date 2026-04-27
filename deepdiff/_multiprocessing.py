@@ -218,3 +218,89 @@ def compute_distances_parallel(
     for i, job in enumerate(jobs):
         out[(job[0], job[1])] = results_by_index[i]
     return out
+
+
+def _hash_worker(job: Tuple[int, Any, str, Dict[str, Any]]) -> Tuple[int, Optional[str]]:
+    """Hash a single iterable item in a worker process.
+
+    ``job`` layout: ``(job_index, item, parent_path, deephash_parameters)``.
+    The worker constructs a fresh ``DeepHash`` (no shared parent state) and
+    looks up the resulting top-level hash for ``item``. Returns
+    ``(job_index, item_hash)`` where ``item_hash`` is None if the item could
+    not be processed — the parent treats that exactly like the serial path's
+    ``KeyError`` / ``unprocessed`` skip.
+
+    UnicodeDecodeError and NotImplementedError propagate as in the serial
+    path; other exceptions surface in the parent through ``future.result()``.
+    """
+    # Imported here to dodge spawn/import-cycle surprises.
+    from deepdiff.deephash import DeepHash
+    from deepdiff.helper import unprocessed
+
+    job_index, item, parent_path, parameters = job
+    deep_hash = DeepHash(
+        item,
+        hashes=None,
+        parent=parent_path,
+        apply_hash=True,
+        **parameters,
+    )
+    try:
+        item_hash = deep_hash[item]
+    except KeyError:
+        return job_index, None
+    if item_hash is unprocessed:
+        return job_index, None
+    return job_index, item_hash
+
+
+def compute_hashes_parallel(
+    jobs: List[Tuple[Any, str]],
+    deephash_parameters: Dict[str, Any],
+    config: MPConfig,
+) -> Optional[List[Optional[str]]]:
+    """Run ``_hash_worker`` over ``jobs`` and return per-item hashes.
+
+    ``jobs`` is a list of ``(item, parent_path)`` tuples in the exact order
+    the serial enumerate-loop visits them. Returns a list aligned to that
+    order, with ``None`` for items the worker could not hash. Returns
+    ``None`` when the section is unsafe to parallelize (unpickleable
+    parameters/items, worker import error). On ``None`` the caller MUST fall
+    back to the serial path.
+
+    Workers may finish out of order; results are collected by their original
+    index so callers see the same output regardless of completion order.
+    Note: child object hashes computed inside each worker are NOT merged
+    back into the parent's ``self.hashes`` — id-based keys for unhashable
+    sub-objects would not match across process boundaries. Parent code that
+    relies on the iterable-level hash being present must continue to compute
+    it serially after the per-item parallel pass.
+    """
+    if not jobs:
+        return []
+
+    if not is_pickleable(deephash_parameters):
+        return None
+    # Sample-pickle the first job; cheap shield against the common
+    # "lambda in custom_operators" or unpickleable item failure.
+    if not is_pickleable(jobs[0]):
+        return None
+
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    payloads = [
+        (i, item, parent_path, deephash_parameters)
+        for i, (item, parent_path) in enumerate(jobs)
+    ]
+
+    results_by_index: Dict[int, Optional[str]] = {}
+    try:
+        with ProcessPoolExecutor(max_workers=config.workers) as executor:
+            futures = [executor.submit(_hash_worker, payload) for payload in payloads]
+            for future in as_completed(futures):
+                idx, item_hash = future.result()
+                results_by_index[idx] = item_hash
+    except (pickle.PicklingError, AttributeError, TypeError):
+        return None
+
+    return [results_by_index[i] for i in range(len(jobs))]

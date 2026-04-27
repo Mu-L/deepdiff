@@ -45,6 +45,7 @@ from deepdiff.lfucache import LFUCache, DummyLFU
 from deepdiff.colored_view import ColoredView
 from deepdiff._multiprocessing import (
     MPConfig, normalize_mp_config, compute_distances_parallel,
+    compute_hashes_parallel,
 )
 
 if TYPE_CHECKING:
@@ -1147,14 +1148,75 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         else:
             hashes[item_hash] = IndexedHash(indexes=[i], item=item)
 
+    def _maybe_compute_hashes_parallel(self, level, obj):
+        """Optionally hash iterable items in worker processes.
+
+        Returns a list of per-index ``item_hash`` values (or ``None`` for
+        items the worker could not process), aligned to ``enumerate(obj)``
+        order. Returns ``None`` when the section ran serially (no
+        ``_mp_config``, below threshold, generator without ``__len__``,
+        unsafe inputs).
+
+        Iteration order is captured here once via ``list(obj)`` so the
+        parent loop and the worker job list see the same items even for
+        order-sensitive iterables like sets.
+        """
+        mp_config = getattr(self, '_mp_config', None)
+        if mp_config is None or not mp_config.enabled:
+            return None, None
+        try:
+            n = len(obj)
+        except TypeError:
+            # Generators / unsized iterables: serial fallback. Materializing
+            # would change semantics (single-pass consumption).
+            return None, None
+        if not mp_config.should_parallelize(n):
+            return None, None
+
+        items = list(obj)
+        parent_base = level.path()
+        jobs = [
+            (item, "{}[{}]".format(parent_base, i))
+            for i, item in enumerate(items)
+        ]
+        hashes = compute_hashes_parallel(
+            jobs=jobs,
+            deephash_parameters=self.deephash_parameters,
+            config=mp_config,
+        )
+        if hashes is None:
+            return None, None
+        return hashes, items
+
     def _create_hashtable(self, level, t):
         """Create hashtable of {item_hash: (indexes, item)}"""
         obj = getattr(level, t)
 
+        # Optionally precompute item hashes in worker processes. Workers
+        # operate on serial-order job indices and the parent merges back
+        # in that same order, so output is independent of worker
+        # completion order. ``items`` is the materialized iterable when
+        # parallel ran (set/dict iteration is deterministic per run but we
+        # need a single pass we can re-walk here).
+        parallel_hashes, materialized_items = self._maybe_compute_hashes_parallel(level, obj)
+        iterator = enumerate(materialized_items) if materialized_items is not None else enumerate(obj)
+
         local_hashes = dict_()
-        for (i, item) in enumerate(obj):
+        for (i, item) in iterator:
             try:
                 parent = "{}[{}]".format(level.path(), i)
+                if parallel_hashes is not None:
+                    item_hash = parallel_hashes[i]
+                    if item_hash is None:
+                        # Worker could not process this item (KeyError or
+                        # unprocessed marker). Mirror the serial pass:
+                        # log once, skip.
+                        self.log_err("Item %s was not processed while hashing "
+                                     "thus not counting this object." %
+                                     level.path())
+                        continue
+                    self._add_hash(hashes=local_hashes, item_hash=item_hash, item=item, i=i)
+                    continue
                 # Note: in the DeepDiff we only calculate the hash of items when we have to.
                 # So self.hashes does not include hashes of all objects in t1 and t2.
                 # It only includes the ones needed when comparing iterables.
@@ -1190,6 +1252,9 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                         self._add_hash(hashes=local_hashes, item_hash=item_hash, item=item, i=i)
 
         # Also we hash the iterables themselves too so that we can later create cache keys from those hashes.
+        # When the per-item loop ran in parallel, child hashes were not merged into ``self.hashes``
+        # (cross-process id keys would not match). The iterable-level pass therefore re-hashes
+        # children serially; this is intentional — correctness over cache reuse for now.
         DeepHash(
             obj,
             hashes=self.hashes,

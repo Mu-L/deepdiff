@@ -3,8 +3,16 @@
 ## Implementation Status
 
 **Phase 1 — landed (2026-04-27).** Subtickets #1 (config + safety fallback) and #3
-(parallel rough-distance loop) are implemented. Subtickets #2, #4, #5, #6 (extended
-matrix), and #7 are still open.
+(parallel rough-distance loop) are implemented.
+
+**Phase 2 — landed (2026-04-27).** Subticket #2 (parallel `_create_hashtable`) is
+implemented. Workers compute per-item DeepHash strings; the parent merges them
+back in stable enumerate-order. The iterable-level hash still runs serially in
+the parent so cross-process id-keyed sub-object cache entries do not need to
+travel back. Unsafe inputs (unpickleable hasher / params, generators without
+`__len__`) fall back to serial.
+
+Subtickets #4, #5, #6 (extended matrix), and #7 are still open.
 
 What works today:
 
@@ -34,20 +42,27 @@ What works today:
 Code locations:
 
 - `deepdiff/_multiprocessing.py` — `MPConfig`, `normalize_mp_config`,
-  `is_pickleable`, `_distance_worker` (module-level for `spawn`),
-  `compute_distances_parallel`.
+  `is_pickleable`, `_distance_worker` and `_hash_worker` (module-level for
+  `spawn`), `compute_distances_parallel`, `compute_hashes_parallel`.
 - `deepdiff/diff.py::DeepDiff.__init__` — three new parameters, normalized into
   `self._mp_config`, propagated through `_parameters`.
 - `deepdiff/diff.py::DeepDiff._maybe_compute_pair_distances_parallel` — the
-  per-call decision/dispatch helper.
+  per-call decision/dispatch helper for the distance loop.
+- `deepdiff/diff.py::DeepDiff._maybe_compute_hashes_parallel` — the per-call
+  decision/dispatch helper for `_create_hashtable`.
 - `deepdiff/diff.py::DeepDiff._get_most_in_common_pairs_in_iterables` — gains
   one extra lookup before `_get_rough_distance_of_hashed_objs`.
+- `deepdiff/diff.py::DeepDiff._create_hashtable` — gains a parallel
+  pre-pass that fills per-index item hashes; serial body unchanged for
+  the fallback path.
 
 Not yet implemented (deferred, intentional):
 
-- **Subticket #2** — parallel `_create_hashtable` / `_prep_iterable` /
-  `_prep_dict`. The doc itself flags cycle-handling and identity-after-pickle
-  risks; these need their own test pass.
+- **Subticket #2 (partial)** — `_prep_iterable` / `_prep_dict` inner-recursion
+  parallelism is still serial. `_create_hashtable` parallelization landed in
+  Phase 2; the deeper recursion levels remain serial for now because their
+  identity-after-pickle and cross-call cache reuse risks are not yet covered
+  by tests.
 - **Subticket #4** — subtree diff parallelism after pairing. `DiffLevel`
   pickling and custom-operator interaction require dedicated work.
 - **Subticket #5** — multiprocessing-aware stats semantics. Parent-only stats
