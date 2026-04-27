@@ -13,13 +13,13 @@ import uuid
 from enum import Enum
 from copy import deepcopy
 from math import isclose as is_close
-from typing import List, Dict, Callable, Union, Any, Pattern, Tuple, Optional, Set, FrozenSet, TYPE_CHECKING, Protocol, Literal
+from typing import List, Dict, Callable, Union, Any, Pattern, Tuple, Optional, Set, FrozenSet, TYPE_CHECKING, Protocol, Literal, cast
 from collections.abc import Mapping, Iterable, Sequence
 from collections import defaultdict
 from inspect import getmembers
 from itertools import zip_longest
 from functools import lru_cache
-from deepdiff.helper import (strings, bytes_type, numbers, uuids, ListItemRemovedOrAdded, notpresent,
+from deepdiff.helper import (strings, bytes_type, numbers, uuids, ListItemRemovedOrAdded, notpresent, not_found,
                              IndexedHash, unprocessed, add_to_frozen_set, basic_types,
                              convert_item_or_items_into_set_else_none, get_type,
                              convert_item_or_items_into_compiled_regexes_else_none,
@@ -1210,9 +1210,12 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         _distance = cache_key = None
         if self._stats[DISTANCE_CACHE_ENABLED]:
             cache_key = self._get_distance_cache_key(added_hash, removed_hash)
-            if cache_key in self._distance_cache:
+            cached_distance = self._distance_cache.get(cache_key)
+            if cached_distance is not_found:
+                _distance = None
+            else:
                 self._stats[DISTANCE_CACHE_HIT_COUNT] += 1
-                _distance = self._distance_cache.get(cache_key)
+                _distance = cast(float, cached_distance)
         if _distance is None:
             # We can only cache the rough distance and not the actual diff result for reuse.
             # The reason is that we have modified the parameters explicitly so they are different and can't
@@ -1254,8 +1257,11 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         cache_key = None
         if self._stats[DISTANCE_CACHE_ENABLED]:
             cache_key = combine_hashes_lists(items=[hashes_added, hashes_removed], prefix='pairs_cache')
-            if cache_key in self._distance_cache:
-                return self._distance_cache.get(cache_key).copy()
+            cached_pairs = self._distance_cache.get(cache_key)
+            if cached_pairs is not_found:
+                cached_pairs = None
+            else:
+                return cast(dict, cached_pairs).copy()
 
         # A dictionary of hashes to distances and each distance to an ordered set of hashes.
         # It tells us about the distance of each object from other objects.
@@ -1296,6 +1302,7 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 if _distance is None:
                     _distance = self._get_rough_distance_of_hashed_objs(
                         added_hash, removed_hash, added_hash_obj, removed_hash_obj, _original_type)
+                _distance = cast(float, _distance)
                 # Left for future debugging
                 # print(f'{Fore.RED}distance of {added_hash_obj.item} and {removed_hash_obj.item}: {_distance}{Style.RESET_ALL}')
                 # Discard potential pairs that are too far.
