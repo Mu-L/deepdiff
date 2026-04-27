@@ -42,7 +42,9 @@ class TestDeltaClassPollution:
         assert 42 == int("41") + 1
 
         # Apply Delta to mydict
-        result = mydict + Delta(pollute_int)
+        with pytest.raises(ValueError) as exc_info:
+            mydict + Delta(pollute_int)
+        assert "traversing dunder attributes is not allowed" == str(exc_info.value)
 
         assert 1337 == int("1337")
 
@@ -128,6 +130,8 @@ class TestDeltaClassPollution:
         PWNED = False
         delta = Delta(pollute_global)
         assert PWNED is False
-        b = Foo() + delta
+        with pytest.raises(ValueError) as exc_info:
+            Foo() + delta
+        assert "traversing dunder attributes is not allowed" == str(exc_info.value)
 
         assert PWNED is False

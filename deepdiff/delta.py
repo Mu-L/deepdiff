@@ -237,11 +237,7 @@ class Delta:
         forced_old_value=None,
         next_element=None,
     ):
-        try:
-            check_elem(elem)
-        except ValueError as error:
-            self._raise_or_log(UNABLE_TO_GET_ITEM_MSG.format(path_for_err_reporting, error))
-            return not_found
+        check_elem(elem)
         # if forced_old_value is not None:
         try:
             if action == GET:
@@ -525,6 +521,8 @@ class Delta:
     def _get_elements_and_details(self, path):
         try:
             elements = _path_to_elements(path)
+            for elem, _ in elements:
+                check_elem(elem)
             if len(elements) > 1:
                 elements_subset = elements[:-2]
                 if len(elements_subset) != len(elements):
@@ -546,8 +544,9 @@ class Delta:
                 obj = self
                 # obj = self.get_nested_obj(obj=self, elements=elements[:-1])
             elem, action = elements[-1]  # type: ignore
-            check_elem(elem)
         except Exception as e:
+            if isinstance(e, ValueError) and str(e) == "traversing dunder attributes is not allowed":
+                raise
             self._raise_or_log(UNABLE_TO_GET_ITEM_MSG.format(path, e))
             return None
         else:
