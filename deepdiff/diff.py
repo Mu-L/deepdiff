@@ -43,6 +43,9 @@ from deepdiff.deephash import DeepHash, combine_hashes_lists
 from deepdiff.base import Base
 from deepdiff.lfucache import LFUCache, DummyLFU
 from deepdiff.colored_view import ColoredView
+from deepdiff._multiprocessing import (
+    MPConfig, normalize_mp_config, compute_distances_parallel,
+)
 
 if TYPE_CHECKING:
     from pytz.tzinfo import BaseTzInfo
@@ -182,6 +185,9 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                  math_epsilon: Optional[float]=None,
                  max_diffs: Optional[int]=None,
                  max_passes: int=10000000,
+                 multiprocessing: bool=False,
+                 multiprocessing_workers: Optional[int]=None,
+                 multiprocessing_threshold: Optional[int]=None,
                  number_format_notation: Literal["f", "e"]="f",
                  number_to_string_func: Optional[Callable]=None,
                  progress_logger: Callable[[str], None]=logger.info,
@@ -210,6 +216,7 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 "cache_tuning_sample_size, get_deep_distance, group_by, group_by_sort_key, cache_purge_level, log_stacktrace,"
                 "math_epsilon, iterable_compare_func, use_enum_value, _original_type, threshold_to_diff_deeper, default_timezone "
                 "ignore_order_func, custom_operators, encodings, ignore_encoding_errors, use_log_scale, log_scale_similarity_threshold "
+                "multiprocessing, multiprocessing_workers, multiprocessing_threshold, "
                 "_parameters and _shared_parameters.") % ', '.join(kwargs.keys()))
 
         if _parameters:
@@ -302,6 +309,8 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
             # DeepDiff _parameters are transformed to DeepHash _parameters via _get_deephash_params method.
             self.progress_logger = progress_logger
             self.cache_size = cache_size
+            self._mp_config = normalize_mp_config(
+                multiprocessing, multiprocessing_workers, multiprocessing_threshold)
             _parameters = self.__dict__.copy()
             _parameters['group_by'] = None  # overwriting since these parameters will be passed on to other passes.
             if log_stacktrace:
@@ -1233,6 +1242,57 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 self._distance_cache.set(cache_key, value=_distance)
         return _distance
 
+    def _maybe_compute_pair_distances_parallel(
+            self, hashes_added, hashes_removed, t1_hashtable, t2_hashtable,
+            parents_ids, _original_type, pre_calced_distances):
+        """Optionally run distance computation for non-cached pairs in workers.
+
+        Returns a dict ``{(added_hash, removed_hash): distance}`` for pairs
+        whose distance was computed in parallel, or ``None`` if the section
+        ran serially (below threshold, unsafe inputs, no _mp_config, etc.).
+
+        The job list is built in the exact order of the serial nested loop
+        so the parent merge order is identical regardless of how many workers
+        run or which one finishes first.
+        """
+        mp_config = getattr(self, '_mp_config', None)
+        if mp_config is None or not mp_config.enabled:
+            return None
+
+        # Build candidate job list in stable nested-loop order. We skip pairs
+        # that the serial loop also skips (loop detection, pre-calculated
+        # distance, distance cache hit) so workers only get real work.
+        jobs = []
+        cache_enabled = self._stats[DISTANCE_CACHE_ENABLED]
+        for added_hash in hashes_added:
+            for removed_hash in hashes_removed:
+                added_hash_obj = t2_hashtable[added_hash]
+                removed_hash_obj = t1_hashtable[removed_hash]
+                if id(removed_hash_obj.item) in parents_ids:
+                    continue
+                if pre_calced_distances and pre_calced_distances.get(
+                        "{}--{}".format(added_hash, removed_hash)) is not None:
+                    continue
+                if cache_enabled:
+                    cache_key = self._get_distance_cache_key(added_hash, removed_hash)
+                    if self._distance_cache.get(cache_key) is not not_found:
+                        # Serial path will pull this from cache; no worker
+                        # needed and we keep cache-hit accounting in the
+                        # parent.
+                        continue
+                jobs.append((added_hash, removed_hash, added_hash_obj.item, removed_hash_obj.item))
+
+        if not mp_config.should_parallelize(len(jobs)):
+            return None
+
+        return compute_distances_parallel(
+            jobs=jobs,
+            parameters=self._parameters,
+            original_type=_original_type,
+            iterable_compare_func=self.iterable_compare_func,
+            config=mp_config,
+        )
+
     def _get_most_in_common_pairs_in_iterables(
             self, hashes_added, hashes_removed, t1_hashtable, t2_hashtable, parents_ids, _original_type):
         """
@@ -1287,6 +1347,14 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
             pre_calced_distances = self._precalculate_distance_by_custom_compare_func(
                 hashes_added, hashes_removed, t1_hashtable, t2_hashtable, _original_type)
 
+        # Optionally precompute non-cached distances in worker processes.
+        # Returns a dict keyed by (added_hash, removed_hash). Pair selection
+        # below stays serial and walks the same nested loop order, so the
+        # public output is independent of worker completion order.
+        parallel_distances = self._maybe_compute_pair_distances_parallel(
+            hashes_added, hashes_removed, t1_hashtable, t2_hashtable,
+            parents_ids, _original_type, pre_calced_distances)
+
         for added_hash in hashes_added:
             for removed_hash in hashes_removed:
                 added_hash_obj = t2_hashtable[added_hash]
@@ -1299,6 +1367,8 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 _distance = None
                 if pre_calced_distances:
                     _distance = pre_calced_distances.get("{}--{}".format(added_hash, removed_hash))
+                if _distance is None and parallel_distances is not None:
+                    _distance = parallel_distances.get((added_hash, removed_hash))
                 if _distance is None:
                     _distance = self._get_rough_distance_of_hashed_objs(
                         added_hash, removed_hash, added_hash_obj, removed_hash_obj, _original_type)
