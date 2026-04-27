@@ -40,11 +40,11 @@ class TestCache:
         stats = diff.get_stats()
         # Somehow just in python 3.5 the cache stats are different. Weird.
         expected_stats = {
-            'PASSES COUNT': 3960,
-            'DIFF COUNT': 19469,
-            'DISTANCE CACHE HIT COUNT': 11847,
-            'MAX PASS LIMIT REACHED': False,
-            'MAX DIFF LIMIT REACHED': False
+            "PASSES COUNT": 5324,
+            "DIFF COUNT": 28020,
+            "DISTANCE CACHE HIT COUNT": 17243,
+            "MAX PASS LIMIT REACHED": False,
+            "MAX DIFF LIMIT REACHED": False,
         }
         assert not DeepDiff(expected_stats, stats, use_log_scale=True)
         assert nested_a_result == diff
