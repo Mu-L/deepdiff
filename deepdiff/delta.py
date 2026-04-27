@@ -391,7 +391,7 @@ class Delta:
                                         value=obj, action=parent_to_obj_action)
 
     def _do_iterable_item_added(self):
-        iterable_item_added = self.diff.get('iterable_item_added', {})
+        iterable_item_added = dict(self.diff.get('iterable_item_added', {}))
         iterable_item_moved = self.diff.get('iterable_item_moved')
 
         # First we need to create a placeholder for moved items.
@@ -448,7 +448,7 @@ class Delta:
             elif len(right_path) > len(left_path):
                 right_path = right_path[:len(left_path)]
             for l_elem, r_elem in zip(left_path, right_path):
-                if type(l_elem) != type(r_elem) or type(l_elem) in None:
+                if type(l_elem) != type(r_elem) or l_elem is None or r_elem is None:
                     l_elem = str(l_elem)
                     r_elem = str(r_elem)
                 try:
@@ -457,7 +457,12 @@ class Delta:
                     elif l_elem > r_elem:
                         return 1
                 except TypeError:
-                    continue
+                    l_elem = str(l_elem)
+                    r_elem = str(r_elem)
+                    if l_elem < r_elem:
+                        return -1
+                    elif l_elem > r_elem:
+                        return 1
         return 0
 
 
@@ -677,7 +682,7 @@ class Delta:
                         # Items are the same in both lists, so we add them to the result
                         transformed.extend(obj[opcode.t1_from_index:opcode.t1_to_index])  # type: ignore
                 if is_obj_tuple:
-                    obj = tuple(obj)  # type: ignore
+                    obj = tuple(transformed)  # type: ignore
                     # Making sure that the object is re-instated inside the parent especially if it was immutable
                     # and we had to turn it into a mutable one. In such cases the object has a new id.
                     self._simple_set_elem_value(obj=parent, path_for_err_reporting=path, elem=parent_to_obj_elem,
@@ -725,18 +730,24 @@ class Delta:
 
     def _do_set_or_frozenset_item(self, items, func):
         for path, value in items.items():
-            elements = _path_to_elements(path)
-            parent = self.get_nested_obj(obj=self, elements=elements[:-1])
-            elem, action = elements[-1]
+            elem_and_details = self._get_elements_and_details(path)
+            if not elem_and_details:
+                continue
+            elements, parent, parent_to_obj_elem, parent_to_obj_action, obj, elem, action = elem_and_details
             obj = self._get_elem_and_compare_to_old_value(
-                parent, path_for_err_reporting=path, expected_old_value=None, elem=elem, action=action, forced_old_value=set())
+                obj, path_for_err_reporting=path, expected_old_value=None, elem=elem, action=action, forced_old_value=set())
             new_value = getattr(obj, func)(value)
-            if hasattr(parent, '_fields') and hasattr(parent, '_replace'):
-                # Handle parent NamedTuple by creating a new instance with _replace(). Will not work with nested objects.
-                new_parent = parent._replace(**{elem: new_value})
-                self.root = new_parent
+            set_parent = self.get_nested_obj(obj=self, elements=elements[:-1])
+            replace = getattr(set_parent, '_replace', None)
+            if hasattr(set_parent, '_fields') and callable(replace):
+                new_parent = replace(**{elem: new_value})
+                if parent is None:
+                    self.root = new_parent
+                else:
+                    self._simple_set_elem_value(parent, path_for_err_reporting=path, elem=parent_to_obj_elem,
+                                                value=new_parent, action=parent_to_obj_action)
             else:
-                self._simple_set_elem_value(parent, path_for_err_reporting=path, elem=elem, value=new_value, action=action)
+                self._simple_set_elem_value(set_parent, path_for_err_reporting=path, elem=elem, value=new_value, action=action)
 
     def _do_ignore_order_get_old(self, obj, remove_indexes_per_path, fixed_indexes_values, path_for_err_reporting):
         """
