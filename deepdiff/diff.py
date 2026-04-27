@@ -86,6 +86,10 @@ MAX_DIFF_LIMIT_REACHED = 'MAX DIFF LIMIT REACHED'
 DISTANCE_CACHE_ENABLED = 'DISTANCE CACHE ENABLED'
 PREVIOUS_DIFF_COUNT = 'PREVIOUS DIFF COUNT'
 PREVIOUS_DISTANCE_CACHE_HIT_COUNT = 'PREVIOUS DISTANCE CACHE HIT COUNT'
+WORKER_DIFF_COUNT = 'WORKER DIFF COUNT'
+WORKER_PASSES_COUNT = 'WORKER PASSES COUNT'
+WORKER_DISTANCE_CACHE_HIT_COUNT = 'WORKER DISTANCE CACHE HIT COUNT'
+WORKER_BATCH_COUNT = 'WORKER BATCH COUNT'
 CANT_FIND_NUMPY_MSG = 'Unable to import numpy. This must be a bug in DeepDiff since a numpy array is detected.'
 INVALID_VIEW_MSG = "view parameter must be one of 'text', 'tree', 'delta', 'colored' or 'colored_compact'. But {} was passed."
 CUTOFF_RANGE_ERROR_MSG = 'cutoff_distance_for_pairs needs to be a positive float max 1.'
@@ -340,6 +344,13 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 MAX_PASS_LIMIT_REACHED: False,
                 MAX_DIFF_LIMIT_REACHED: False,
                 DISTANCE_CACHE_ENABLED: bool(cache_size),
+                # Multiprocessing aggregates: each parallel batch sums per-worker
+                # _stats deltas into these keys. Parent-side counters above stay
+                # comparable to a serial run so existing tests are unaffected.
+                WORKER_DIFF_COUNT: 0,
+                WORKER_PASSES_COUNT: 0,
+                WORKER_DISTANCE_CACHE_HIT_COUNT: 0,
+                WORKER_BATCH_COUNT: 0,
             }
             self.hashes = dict_() if hashes is None else hashes
             self._numpy_paths = dict_()  # if _numpy_paths is None else _numpy_paths
@@ -1350,13 +1361,38 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         if not mp_config.should_parallelize(len(jobs)):
             return None
 
-        return compute_distances_parallel(
+        result = compute_distances_parallel(
             jobs=jobs,
             parameters=self._parameters,
             original_type=_original_type,
             iterable_compare_func=self.iterable_compare_func,
             config=mp_config,
         )
+        if result is None:
+            return None
+        distances, worker_stats = result
+        self._merge_worker_stats(worker_stats)
+        return distances
+
+    def _merge_worker_stats(self, worker_stats):
+        """Aggregate one parallel-batch's worker ``_stats`` delta into self._stats.
+
+        Counters (DIFF / PASSES / DISTANCE CACHE HIT) sum into the matching
+        ``WORKER_*`` keys; limit flags OR-merge into the parent's existing
+        MAX_*_LIMIT_REACHED flags so any worker hitting a guard surfaces the
+        same warning state on the public ``get_stats()`` output.
+        """
+        if not worker_stats:
+            return
+        self._stats[WORKER_DIFF_COUNT] += int(worker_stats.get('DIFF COUNT', 0) or 0)
+        self._stats[WORKER_PASSES_COUNT] += int(worker_stats.get('PASSES COUNT', 0) or 0)
+        self._stats[WORKER_DISTANCE_CACHE_HIT_COUNT] += int(
+            worker_stats.get('DISTANCE CACHE HIT COUNT', 0) or 0)
+        self._stats[WORKER_BATCH_COUNT] += 1
+        if worker_stats.get(MAX_PASS_LIMIT_REACHED):
+            self._stats[MAX_PASS_LIMIT_REACHED] = True
+        if worker_stats.get(MAX_DIFF_LIMIT_REACHED):
+            self._stats[MAX_DIFF_LIMIT_REACHED] = True
 
     def _get_most_in_common_pairs_in_iterables(
             self, hashes_added, hashes_removed, t1_hashtable, t2_hashtable, parents_ids, _original_type):
@@ -1578,12 +1614,15 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         if (mp_config is not None and mp_config.enabled
                 and mp_config.should_parallelize(len(pending_jobs))):
             jobs_payload = [(t1_item, t2_item) for (_, t1_item, t2_item, _) in pending_jobs]
-            parallel_results = compute_subtree_diffs_parallel(
+            outcome = compute_subtree_diffs_parallel(
                 jobs=jobs_payload,
                 parameters=self._parameters,
                 original_type=_original_type,
                 config=mp_config,
             )
+            if outcome is not None:
+                parallel_results, worker_stats = outcome
+                self._merge_worker_stats(worker_stats)
 
         if parallel_results is None:
             # Below threshold or unsafe inputs — run inline-equivalent serial.

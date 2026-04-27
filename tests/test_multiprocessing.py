@@ -17,6 +17,8 @@ from deepdiff._multiprocessing import (
     compute_distances_parallel,
     compute_hashes_parallel,
     compute_subtree_diffs_parallel,
+    _aggregate_worker_stats,
+    _extract_worker_stats,
 )
 
 
@@ -116,7 +118,13 @@ class TestSubtreeParallelHelper:
         result = compute_subtree_diffs_parallel(
             jobs=[], parameters={}, original_type=None, config=cfg,
         )
-        assert result == []
+        # Phase 4: orchestrator now returns (entries_by_job, worker_stats).
+        assert result is not None
+        entries_by_job, worker_stats = result
+        assert entries_by_job == []
+        assert worker_stats['DIFF COUNT'] == 0
+        assert worker_stats['PASSES COUNT'] == 0
+        assert worker_stats['MAX DIFF LIMIT REACHED'] is False
 
     def test_unpickleable_parameters_returns_none(self):
         cfg = MPConfig(enabled=True, workers=2, threshold=0)
@@ -263,3 +271,126 @@ class TestSubtreeFallbackSlow:
         serial = DeepDiff(t1, t2, ignore_order=True, hasher=bad_hasher)
         parallel = _run_parallel(t1, t2, ignore_order=True, hasher=bad_hasher)
         assert parallel == serial
+
+
+class TestWorkerStatsUnit:
+    """Phase 4 unit-level checks for the stats extraction/aggregation helpers."""
+
+    def test_extract_worker_stats_handles_missing_attribute(self):
+        class _Bare:
+            pass
+        # No ``_stats`` attribute at all — extractor must return zeroed counters
+        # rather than crash. This shields against the future case where a
+        # worker's DeepDiff is replaced by a non-DeepDiff stand-in.
+        delta = _extract_worker_stats(_Bare())
+        assert delta['DIFF COUNT'] == 0
+        assert delta['PASSES COUNT'] == 0
+        assert delta['DISTANCE CACHE HIT COUNT'] == 0
+        assert delta['MAX PASS LIMIT REACHED'] is False
+        assert delta['MAX DIFF LIMIT REACHED'] is False
+
+    def test_aggregate_sums_counters_and_or_merges_flags(self):
+        deltas = [
+            {'DIFF COUNT': 3, 'PASSES COUNT': 1, 'DISTANCE CACHE HIT COUNT': 0,
+             'MAX PASS LIMIT REACHED': False, 'MAX DIFF LIMIT REACHED': False},
+            {'DIFF COUNT': 7, 'PASSES COUNT': 2, 'DISTANCE CACHE HIT COUNT': 4,
+             'MAX PASS LIMIT REACHED': True,  'MAX DIFF LIMIT REACHED': False},
+            {},  # empty/missing delta must be tolerated
+        ]
+        agg = _aggregate_worker_stats(deltas)
+        assert agg['DIFF COUNT'] == 10
+        assert agg['PASSES COUNT'] == 3
+        assert agg['DISTANCE CACHE HIT COUNT'] == 4
+        assert agg['MAX PASS LIMIT REACHED'] is True
+        assert agg['MAX DIFF LIMIT REACHED'] is False
+
+    def test_aggregate_empty_input_returns_zeroed_dict(self):
+        agg = _aggregate_worker_stats([])
+        assert agg == {
+            'DIFF COUNT': 0,
+            'PASSES COUNT': 0,
+            'DISTANCE CACHE HIT COUNT': 0,
+            'MAX PASS LIMIT REACHED': False,
+            'MAX DIFF LIMIT REACHED': False,
+        }
+
+
+class TestStatsKeys:
+    """get_stats() must always expose the new WORKER_* keys, even in serial mode."""
+
+    def test_serial_run_exposes_worker_keys_zeroed(self):
+        # No multiprocessing means workers never ran — but the keys must exist
+        # so downstream consumers that read them unconditionally don't KeyError.
+        diff = DeepDiff([1, 2, 3], [1, 2, 4], ignore_order=True)
+        stats = diff.get_stats()
+        assert stats['WORKER DIFF COUNT'] == 0
+        assert stats['WORKER PASSES COUNT'] == 0
+        assert stats['WORKER DISTANCE CACHE HIT COUNT'] == 0
+        assert stats['WORKER BATCH COUNT'] == 0
+
+    def test_existing_stats_keys_still_present(self):
+        # Phase 4 must not regress the keys Phase 1 / pre-MP code relies on.
+        diff = DeepDiff([1, 2, 3], [1, 2, 4], ignore_order=True)
+        stats = diff.get_stats()
+        for key in ('PASSES COUNT', 'DIFF COUNT', 'DISTANCE CACHE HIT COUNT',
+                    'MAX PASS LIMIT REACHED', 'MAX DIFF LIMIT REACHED'):
+            assert key in stats
+
+
+@pytest.mark.slow
+class TestWorkerStatsAggregationSlow:
+    """End-to-end checks: workers must contribute to the WORKER_* aggregates."""
+
+    def test_paired_subtree_run_aggregates_worker_stats(self):
+        # Force the subtree-parallel path: lots of paired-item diffs, threshold
+        # 0 so we don't fall through to serial. ``cutoff_intersection_for_pairs=1``
+        # is required — the default cutoff disables pair selection when most
+        # items differ, which is exactly our setup, so without it the subtree
+        # queue stays empty and no batch is dispatched.
+        t1 = [{"id": i, "data": {"x": i, "y": [i, i + 1]}} for i in range(20)]
+        t2 = [{"id": i, "data": {"x": i, "y": [i, i + 2]}} for i in range(20)]
+        diff = _run_parallel(t1, t2, ignore_order=True, cutoff_intersection_for_pairs=1)
+        stats = diff.get_stats()
+        assert stats['WORKER BATCH COUNT'] >= 1, (
+            "expected at least one parallel batch to have run; got stats=%r" % stats
+        )
+        assert stats['WORKER DIFF COUNT'] > 0, (
+            "workers must have done diffs; got %r" % stats
+        )
+
+    def test_distance_loop_aggregates_worker_stats(self):
+        # Many added/removed candidates with distinct shapes — drives the
+        # distance-loop parallel path even when subtree pairing rejects most
+        # pairs. Also leans on threshold=0 to guarantee we go through the pool.
+        t1 = [{"id": i, "v": [i, i, i]} for i in range(80)]
+        t2 = [{"id": i + 1000, "v": [i, i, i + 1]} for i in range(80)]
+        diff = _run_parallel(t1, t2, ignore_order=True, cutoff_intersection_for_pairs=1)
+        stats = diff.get_stats()
+        # Either the distance batch or the subtree batch must have shipped to
+        # workers; both feed _merge_worker_stats so the batch counter is the
+        # cleanest evidence that aggregation actually fired.
+        assert stats['WORKER BATCH COUNT'] >= 1
+
+    def test_aggregation_does_not_corrupt_parent_counters(self):
+        # Phase 4 must not double-count: parent DIFF COUNT must remain in the
+        # same ballpark as a serial run, even when workers add their own.
+        t1 = [{"id": i, "v": i} for i in range(20)]
+        t2 = [{"id": i, "v": i + (1 if i == 5 else 0)} for i in range(20)]
+        serial = DeepDiff(t1, t2, ignore_order=True, cutoff_intersection_for_pairs=1)
+        parallel = _run_parallel(t1, t2, ignore_order=True, cutoff_intersection_for_pairs=1)
+        # Result must still match.
+        assert parallel == serial
+        # Parent DIFF COUNT may differ slightly because pair-selection traversal
+        # avoids some inline _diff calls when distances are precomputed in
+        # workers, but the order of magnitude must still be reasonable —
+        # specifically, parent count alone must not silently include worker work.
+        s_parent = serial.get_stats()['DIFF COUNT']
+        p_parent = parallel.get_stats()['DIFF COUNT']
+        # Parent-only count in a parallel run is <= serial count: the pairs
+        # whose distance was computed in a worker are subtracted from the
+        # parent's inline path. This invariant breaks if we accidentally also
+        # added worker counts back into DIFF COUNT.
+        assert p_parent <= s_parent, (
+            "parent DIFF COUNT %d exceeds serial %d — looks like worker "
+            "counts are leaking into the parent counter" % (p_parent, s_parent)
+        )

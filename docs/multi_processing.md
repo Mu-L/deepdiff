@@ -33,7 +33,28 @@ Without this, identity checks like `change.t2 is not notpresent` (used by
 `TextResult._from_tree_default` to decide t1-vs-t2 reporting) break on any
 DiffLevel that travels through `pickle`, which is exactly the Phase 3 path.
 
-Subtickets #5, #6 (extended matrix), and #7 are still open.
+**Phase 4 — landed (2026-04-27).** Subticket #5 (multiprocessing-aware stats)
+is implemented. Workers now return their internal `_stats` snapshot alongside
+their primary result; the parent aggregates those deltas into four new keys on
+its own `_stats` dict — `WORKER DIFF COUNT`, `WORKER PASSES COUNT`,
+`WORKER DISTANCE CACHE HIT COUNT`, and `WORKER BATCH COUNT` — and OR-merges
+worker `MAX PASS LIMIT REACHED` / `MAX DIFF LIMIT REACHED` flags into the
+parent's existing flags so any worker hitting a guard surfaces the same
+warning state on the public `get_stats()` output. Parent counters
+(`DIFF COUNT`, `PASSES COUNT`, `DISTANCE CACHE HIT COUNT`) stay scoped to the
+parent process so they remain comparable to a serial run; this is what lets
+existing stats-asserting tests pass with multiprocessing on.
+
+`max_diffs` and `max_passes` continue to act as approximate stop guards.
+Workers run their own `DeepDiff` with the same constructor params, so they
+trip the limit locally; the OR-merge means the parent's
+`MAX_*_LIMIT_REACHED` flags reflect "any worker hit it" without requiring
+exact serial-equivalent counts (which the doc explicitly does not require).
+`get_stats()` always exposes the new `WORKER_*` keys, even on serial runs,
+so consumers can read them unconditionally — they just stay zero when
+multiprocessing is off or below threshold.
+
+Subtickets #6 (extended matrix) and #7 (benchmarks) are still open.
 
 What works today:
 
@@ -61,6 +82,15 @@ What works today:
   fallback, `exclude_obj_callback` fallback, plus direct unit tests for
   `compute_subtree_diffs_parallel`). All other test files still pass
   unchanged.
+- Phase 4 adds 8 stats-aggregation tests in `tests/test_multiprocessing.py`
+  (`TestWorkerStatsUnit` for `_extract_worker_stats` / `_aggregate_worker_stats`,
+  `TestStatsKeys` for the always-present `WORKER_*` keys on serial runs, and
+  `TestWorkerStatsAggregationSlow` covering paired-subtree aggregation,
+  distance-loop aggregation, and the no-double-counting invariant). The
+  pre-existing stats-asserting tests in `tests/test_cache.py` and
+  `tests/test_ignore_order.py` were updated to include the four new zeroed
+  keys in their `expected_stats` dicts; all of them continue to pass with
+  unchanged primary counter values.
 
 Code locations:
 
@@ -89,6 +119,24 @@ Code locations:
 - `deepdiff/helper.py` — `NotPresent` / `Unprocessed` / `Skipped` /
   `NotHashed` gained `__reduce__` so the singleton sentinels survive
   `spawn`-based pickle round-trips.
+- `deepdiff/_multiprocessing.py::_extract_worker_stats`,
+  `_aggregate_worker_stats` — Phase 4 helpers. Each worker dispatch returns
+  a small picklable stats dict (`DIFF COUNT`, `PASSES COUNT`,
+  `DISTANCE CACHE HIT COUNT`, plus the two limit flags); the orchestrator
+  sums counters and OR-merges flags before handing them back.
+- `deepdiff/_multiprocessing.py::compute_distances_parallel`,
+  `compute_subtree_diffs_parallel` — both now return
+  `(primary_result, aggregated_worker_stats)` instead of just
+  `primary_result` (the `None` failure-case sentinel is unchanged).
+- `deepdiff/diff.py::DeepDiff._merge_worker_stats` — Phase 4 helper that
+  takes one orchestrator's aggregated stats dict and folds it into the
+  parent's `self._stats`. Called by both
+  `_maybe_compute_pair_distances_parallel` and `_dispatch_subtree_jobs`.
+- `deepdiff/diff.py` — four new module-level constants
+  (`WORKER_DIFF_COUNT`, `WORKER_PASSES_COUNT`,
+  `WORKER_DISTANCE_CACHE_HIT_COUNT`, `WORKER_BATCH_COUNT`) plus
+  initialization in `__init__` so the keys are always present in
+  `get_stats()`.
 
 Not yet implemented (deferred, intentional):
 
@@ -105,8 +153,6 @@ Not yet implemented (deferred, intentional):
   the current tests don't cover. Worker-side `_iterable_opcodes` are also
   not propagated, so `DELTA_VIEW` of a paired subtree containing ordered
   iterables is not yet covered by Phase 3.
-- **Subticket #5** — multiprocessing-aware stats semantics. Parent-only stats
-  remain meaningful in Phase 1, but no aggregation across workers.
 - **Subticket #6** — extended test matrix (numpy, pydantic, namedtuple, group_by,
   large-mixed structures, worker exception propagation tests). Phase 1 ships
   the core determinism harness; the rest is additive.

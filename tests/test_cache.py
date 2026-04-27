@@ -63,7 +63,12 @@ class TestCache:
             'DIFF COUNT': 306,
             'DISTANCE CACHE HIT COUNT': 0,
             'MAX PASS LIMIT REACHED': False,
-            'MAX DIFF LIMIT REACHED': False
+            'MAX DIFF LIMIT REACHED': False,
+            # Phase 4: zeroed worker aggregates always present in get_stats().
+            'WORKER DIFF COUNT': 0,
+            'WORKER PASSES COUNT': 0,
+            'WORKER DISTANCE CACHE HIT COUNT': 0,
+            'WORKER BATCH COUNT': 0,
         }
         stats_diff = DeepDiff(expected_stats, stats, use_log_scale=True, log_scale_similarity_threshold=0.15)
         assert not stats_diff
@@ -93,7 +98,12 @@ class TestCache:
             'DIFF COUNT': 50,
             'DISTANCE CACHE HIT COUNT': 0,
             'MAX PASS LIMIT REACHED': False,
-            'MAX DIFF LIMIT REACHED': False
+            'MAX DIFF LIMIT REACHED': False,
+            # Phase 4: zeroed worker aggregates always present in get_stats().
+            'WORKER DIFF COUNT': 0,
+            'WORKER PASSES COUNT': 0,
+            'WORKER DISTANCE CACHE HIT COUNT': 0,
+            'WORKER BATCH COUNT': 0,
         }
         assert expected_stats == stats
 
@@ -123,7 +133,12 @@ class TestCache:
             'DIFF COUNT': 16,
             'DISTANCE CACHE HIT COUNT': 0,
             'MAX PASS LIMIT REACHED': False,
-            'MAX DIFF LIMIT REACHED': False
+            'MAX DIFF LIMIT REACHED': False,
+            # Phase 4: zeroed worker aggregates always present in get_stats().
+            'WORKER DIFF COUNT': 0,
+            'WORKER PASSES COUNT': 0,
+            'WORKER DISTANCE CACHE HIT COUNT': 0,
+            'WORKER BATCH COUNT': 0,
         }
         assert expected_stats == stats
 

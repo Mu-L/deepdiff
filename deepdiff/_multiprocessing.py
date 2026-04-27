@@ -23,6 +23,46 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 DEFAULT_MAX_WORKERS = 4
 DEFAULT_THRESHOLD = 64
 
+# Keys we lift out of a worker's internal _stats and ship back to the parent.
+# These mirror the same string constants used by ``deepdiff/diff.py``; we keep
+# string literals here to avoid importing diff.py at module load (which would
+# create an import cycle under spawn).
+_WORKER_STATS_COUNTER_KEYS = ('DIFF COUNT', 'PASSES COUNT', 'DISTANCE CACHE HIT COUNT')
+_WORKER_STATS_FLAG_KEYS = ('MAX PASS LIMIT REACHED', 'MAX DIFF LIMIT REACHED')
+
+
+def _extract_worker_stats(diff_instance: Any) -> Dict[str, Any]:
+    """Pull a small, picklable stats snapshot off a worker-local DeepDiff.
+
+    Returns a dict with integer counters plus boolean limit flags. Missing keys
+    are tolerated so this stays robust if ``_stats`` shrinks at the end of
+    ``__init__`` (it currently deletes ``DISTANCE CACHE ENABLED`` and the
+    ``PREVIOUS *`` bookkeeping keys before we get here).
+    """
+    stats = getattr(diff_instance, '_stats', None) or {}
+    delta: Dict[str, Any] = {}
+    for key in _WORKER_STATS_COUNTER_KEYS:
+        delta[key] = int(stats.get(key, 0) or 0)
+    for key in _WORKER_STATS_FLAG_KEYS:
+        delta[key] = bool(stats.get(key, False))
+    return delta
+
+
+def _aggregate_worker_stats(deltas: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Sum counter keys and OR-merge limit flags across worker deltas."""
+    out: Dict[str, Any] = {key: 0 for key in _WORKER_STATS_COUNTER_KEYS}
+    for key in _WORKER_STATS_FLAG_KEYS:
+        out[key] = False
+    for delta in deltas:
+        if not delta:
+            continue
+        for key in _WORKER_STATS_COUNTER_KEYS:
+            out[key] += int(delta.get(key, 0) or 0)
+        for key in _WORKER_STATS_FLAG_KEYS:
+            if delta.get(key):
+                out[key] = True
+    return out
+
 
 @dataclass(frozen=True)
 class MPConfig:
@@ -114,7 +154,9 @@ def _sanitize_parameters_for_worker(parameters: Dict[str, Any]) -> Dict[str, Any
     return sanitized
 
 
-def _distance_worker(job: Tuple[int, Dict[str, Any], Any, Any, Any, Any]) -> Tuple[int, float]:
+def _distance_worker(
+    job: Tuple[int, Dict[str, Any], Any, Any, Any, Any],
+) -> Tuple[int, float, Dict[str, Any]]:
     """Compute the rough distance between two items in a worker process.
 
     ``job`` layout matches what ``compute_distances_parallel`` ships:
@@ -123,7 +165,9 @@ def _distance_worker(job: Tuple[int, Dict[str, Any], Any, Any, Any, Any]) -> Tup
 
     The worker constructs a fresh root ``DeepDiff`` (no shared parent state),
     requests the DELTA_VIEW so we hit the same code path as the serial call in
-    ``_get_rough_distance_of_hashed_objs``, and returns the resulting float.
+    ``_get_rough_distance_of_hashed_objs``, and returns the resulting float
+    plus a ``_extract_worker_stats`` snapshot so the parent can aggregate
+    diff/pass/cache-hit counts into its WORKER_* stats keys.
     """
     # Imported here to keep module import cheap and to dodge any circular
     # import surprises under spawn.
@@ -144,7 +188,7 @@ def _distance_worker(job: Tuple[int, Dict[str, Any], Any, Any, Any, Any]) -> Tup
         # call below, hence cache_purge_level=0.
         cache_purge_level=0,
     )
-    return job_index, cast(float, diff._get_rough_distance())
+    return job_index, cast(float, diff._get_rough_distance()), _extract_worker_stats(diff)
 
 
 def compute_distances_parallel(
@@ -153,7 +197,7 @@ def compute_distances_parallel(
     original_type: Any,
     iterable_compare_func: Optional[Callable],
     config: MPConfig,
-) -> Optional[Dict[Tuple[Any, Any], float]]:
+) -> Optional[Tuple[Dict[Tuple[Any, Any], float], Dict[str, Any]]]:
     """Run ``_distance_worker`` over ``jobs`` and return distances by pair.
 
     ``jobs`` is a list of ``(added_hash, removed_hash, added_item, removed_item)``
@@ -161,17 +205,20 @@ def compute_distances_parallel(
     is responsible for that ordering; this helper does not reorder anything.
 
     Returns:
-        A dict ``{(added_hash, removed_hash): distance}``, or ``None`` if the
-        section is unsafe to parallelize (unpickleable inputs/parameters,
-        worker import error, etc.). On ``None`` the caller MUST fall back to
-        the serial path so correctness is preserved.
+        ``(distances_by_pair, aggregated_worker_stats)`` where the first item
+        is a dict ``{(added_hash, removed_hash): distance}`` and the second is
+        the aggregated ``_extract_worker_stats`` snapshot summed across all
+        workers (counter keys summed, limit flags OR-merged). Returns
+        ``None`` if the section is unsafe to parallelize (unpickleable
+        inputs/parameters, worker import error, etc.). On ``None`` the caller
+        MUST fall back to the serial path so correctness is preserved.
 
     Workers may finish out of order; we collect results into a dict keyed by
     the original job index, so callers see the same result regardless of
     completion order.
     """
     if not jobs:
-        return {}
+        return {}, _aggregate_worker_stats([])
 
     sanitized_params = _sanitize_parameters_for_worker(parameters)
 
@@ -200,14 +247,16 @@ def compute_distances_parallel(
         )
 
     results_by_index: Dict[int, float] = {}
+    stats_deltas: List[Dict[str, Any]] = []
     try:
         with ProcessPoolExecutor(max_workers=config.workers) as executor:
             futures = [executor.submit(_distance_worker, payload) for payload in payloads]
             for future in as_completed(futures):
                 # Re-raise worker exceptions in the parent so they surface as
                 # normal DeepDiff exceptions instead of being swallowed.
-                idx, distance = future.result()
+                idx, distance, stats_delta = future.result()
                 results_by_index[idx] = distance
+                stats_deltas.append(stats_delta)
     except (pickle.PicklingError, AttributeError, TypeError):
         # Pickling/spawn-related failures: surface as a serial fallback rather
         # than crashing the diff. Other exceptions (worker logic bugs, user
@@ -217,7 +266,7 @@ def compute_distances_parallel(
     out: Dict[Tuple[Any, Any], float] = {}
     for i, job in enumerate(jobs):
         out[(job[0], job[1])] = results_by_index[i]
-    return out
+    return out, _aggregate_worker_stats(stats_deltas)
 
 
 def _hash_worker(job: Tuple[int, Any, str, Dict[str, Any]]) -> Tuple[int, Optional[str]]:
@@ -256,7 +305,7 @@ def _hash_worker(job: Tuple[int, Any, str, Dict[str, Any]]) -> Tuple[int, Option
 
 def _subtree_diff_worker(
     job: Tuple[int, Dict[str, Any], Any, Any, Any],
-) -> Tuple[int, List[Tuple[str, Any]]]:
+) -> Tuple[int, List[Tuple[str, Any]], Dict[str, Any]]:
     """Run one paired-item subtree diff in a worker process.
 
     ``job`` layout: ``(job_index, sanitized_parameters, t1, t2, _original_type)``.
@@ -290,7 +339,7 @@ def _subtree_diff_worker(
             continue
         for leaf in levels:
             entries.append((report_type, leaf))
-    return job_index, entries
+    return job_index, entries, _extract_worker_stats(diff)
 
 
 def compute_subtree_diffs_parallel(
@@ -298,14 +347,17 @@ def compute_subtree_diffs_parallel(
     parameters: Dict[str, Any],
     original_type: Any,
     config: MPConfig,
-) -> Optional[List[List[Tuple[str, Any]]]]:
+) -> Optional[Tuple[List[List[Tuple[str, Any]]], Dict[str, Any]]]:
     """Run ``_subtree_diff_worker`` over ``jobs`` and return per-job entries.
 
     ``jobs`` is a list of ``(t1_item, t2_item)`` tuples in the exact order
-    the serial paired-iteration code visits them. Returns a list aligned to
-    that order; each element is ``[(report_type, leaf_difflevel), ...]``
-    suitable for the parent to rebase and merge into its tree. Returns
-    ``None`` when the section is unsafe to parallelize (unpickleable
+    the serial paired-iteration code visits them. Returns
+    ``(entries_by_job, aggregated_worker_stats)`` where ``entries_by_job`` is
+    a list aligned to job order — each element is ``[(report_type,
+    leaf_difflevel), ...]`` suitable for the parent to rebase and merge into
+    its tree — and ``aggregated_worker_stats`` is the per-batch ``_stats``
+    deltas summed across workers (counters summed, limit flags OR-merged).
+    Returns ``None`` when the section is unsafe to parallelize (unpickleable
     parameters/items, worker import error). On ``None`` the caller MUST run
     the same jobs serially so correctness is preserved.
 
@@ -313,7 +365,7 @@ def compute_subtree_diffs_parallel(
     job index so the merge order is identical regardless of completion order.
     """
     if not jobs:
-        return []
+        return [], _aggregate_worker_stats([])
 
     sanitized_params = _sanitize_parameters_for_worker(parameters)
 
@@ -332,16 +384,21 @@ def compute_subtree_diffs_parallel(
     ]
 
     results_by_index: Dict[int, List[Tuple[str, Any]]] = {}
+    stats_deltas: List[Dict[str, Any]] = []
     try:
         with ProcessPoolExecutor(max_workers=config.workers) as executor:
             futures = [executor.submit(_subtree_diff_worker, payload) for payload in payloads]
             for future in as_completed(futures):
-                idx, entries = future.result()
+                idx, entries, stats_delta = future.result()
                 results_by_index[idx] = entries
+                stats_deltas.append(stats_delta)
     except (pickle.PicklingError, AttributeError, TypeError):
         return None
 
-    return [results_by_index[i] for i in range(len(jobs))]
+    return (
+        [results_by_index[i] for i in range(len(jobs))],
+        _aggregate_worker_stats(stats_deltas),
+    )
 
 
 def compute_hashes_parallel(
