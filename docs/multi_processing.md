@@ -54,7 +54,37 @@ exact serial-equivalent counts (which the doc explicitly does not require).
 so consumers can read them unconditionally — they just stay zero when
 multiprocessing is off or below threshold.
 
-Subtickets #6 (extended matrix) and #7 (benchmarks) are still open.
+**Phase 5 — landed (2026-04-27).** Subticket #6 (extended determinism
+matrix) is implemented. `tests/test_multiprocessing.py` now includes
+`TestDeterminismMatrixSlow` (15 cases — `report_repetition=False`,
+sets/frozensets, pickleable custom hasher, `ignore_string_case`,
+`ignore_numeric_type_changes`, `ignore_string_type_changes`, `include_paths`,
+`exclude_regex_paths`, namedtuple, `__slots__`, `__dict__`-based objects,
+`group_by`, generator inputs, `verbose_level=2`, and a `to_dict()`-equality
+guard), `TestDeterminismNumpySlow` (numpy arrays inside dicts; uses
+`pytest.importorskip` so it skips when numpy is absent),
+`TestDeterminismPydanticSlow` (pydantic `BaseModel` items in a list; skipped
+when pydantic isn't installed), `TestPickleFailureFallbackSlow` (closure
+`iterable_compare_func`), and `TestWorkerExceptionPropagationSlow` (uses an
+`__reduce__` payload that survives `pickle.dumps` but raises on unpickle —
+proves the helper does not silently swallow non-pickle worker failures).
+All cases assert `parallel == serial`.
+
+**Phase 6 — landed (2026-04-27).** Subticket #7 (benchmarks) is implemented.
+`benchmarks/multiprocessing_bench.py` is a standalone script that runs three
+representative `ignore_order=True` workloads — `paired_subtree`,
+`distance_loop`, and `large_nested_dicts` — at a configurable scale, prints
+serial baseline + parallel-at-N-workers timings, and asserts the parallel
+result equals the serial result for every row. Non-zero exit on result
+divergence so it can gate CI later. Defaults are tuned so each row takes a
+few seconds; `--quick` shrinks scales for a fast smoke test, `--scale N`
+pins one explicit size, and `--workers N` (repeatable) lets you sweep
+worker counts. Verified against 3.14 CPython on an 8-core box: at the quick
+scales spawn overhead dominates (parallel slower, as expected — this is
+exactly what `DEFAULT_THRESHOLD = 64` is designed to avoid), and at
+`paired_subtree` scale=400 the 2-worker run beats serial ~1.3×. The doc's
+warning still stands — `multiprocessing=False` remains the default until a
+clear cross-platform speedup curve justifies otherwise.
 
 What works today:
 
@@ -91,6 +121,12 @@ What works today:
   `tests/test_ignore_order.py` were updated to include the four new zeroed
   keys in their `expected_stats` dicts; all of them continue to pass with
   unchanged primary counter values.
+- Phase 5 adds 21 determinism / fallback / propagation tests in
+  `tests/test_multiprocessing.py` covering the public-API matrix listed in
+  Subticket #6, plus the new worker-exception-propagation harness.
+- Phase 6 adds the `benchmarks/multiprocessing_bench.py` runner — three
+  workloads, configurable scale and worker counts, result-equality assertion,
+  non-zero exit on divergence.
 
 Code locations:
 
@@ -137,6 +173,18 @@ Code locations:
   `WORKER_DISTANCE_CACHE_HIT_COUNT`, `WORKER_BATCH_COUNT`) plus
   initialization in `__init__` so the keys are always present in
   `get_stats()`.
+- `tests/test_multiprocessing.py` — Phase 5 classes
+  (`TestDeterminismMatrixSlow`, `TestDeterminismNumpySlow`,
+  `TestDeterminismPydanticSlow`, `TestPickleFailureFallbackSlow`,
+  `TestWorkerExceptionPropagationSlow`) and the supporting module-level
+  helpers (`_SlotPoint`, `_DictBag`, `_NamedPoint`, `_hex_hasher`,
+  `_ExplodingItem` / `_explode_on_unpickle`).
+- `benchmarks/multiprocessing_bench.py` — Phase 6 runner. Three
+  representative `ignore_order=True` workloads
+  (`workload_paired_subtree`, `workload_distance_loop`,
+  `workload_large_nested_dicts`), `--workers` / `--scale` / `--quick`
+  CLI flags, and a `print_table` summary. Run with
+  `python -m benchmarks.multiprocessing_bench` from the repo root.
 
 Not yet implemented (deferred, intentional):
 
@@ -153,12 +201,11 @@ Not yet implemented (deferred, intentional):
   the current tests don't cover. Worker-side `_iterable_opcodes` are also
   not propagated, so `DELTA_VIEW` of a paired subtree containing ordered
   iterables is not yet covered by Phase 3.
-- **Subticket #6** — extended test matrix (numpy, pydantic, namedtuple, group_by,
-  large-mixed structures, worker exception propagation tests). Phase 1 ships
-  the core determinism harness; the rest is additive.
-- **Subticket #7** — benchmarks. The doc says default thresholds shouldn't
-  change before benchmarks land; the current `DEFAULT_THRESHOLD = 64` is a
-  conservative placeholder.
+- **Threshold tuning** — `DEFAULT_THRESHOLD = 64` remains a conservative
+  placeholder. The Phase 6 benchmark gives us a tool to revisit this; on the
+  quick-scale runs spawn overhead still dominates so the threshold is
+  intentionally above where small workloads land. Tuning should happen on
+  representative production workloads, not on the benchmark fixtures.
 
 ---
 

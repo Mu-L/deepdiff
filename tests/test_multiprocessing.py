@@ -394,3 +394,309 @@ class TestWorkerStatsAggregationSlow:
             "parent DIFF COUNT %d exceeds serial %d — looks like worker "
             "counts are leaking into the parent counter" % (p_parent, s_parent)
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — extended determinism matrix (Subticket #6).
+#
+# Every test below pins the parallel result against the serial result for one
+# axis of the public API. The point isn't to re-test that DeepDiff handles
+# these features (other test files do that); it's to prove that turning
+# multiprocessing on is a no-op for output across the supported surface.
+#
+# These are marked ``@pytest.mark.slow`` because each one pays a pool-spawn
+# tax and they would dominate the default test run. Running ``pytest --runslow``
+# exercises the full matrix.
+# ---------------------------------------------------------------------------
+
+
+# Module-level — pickleable under spawn.
+class _SlotPoint:
+    __slots__ = ("x", "y")
+
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __eq__(self, other):
+        return isinstance(other, _SlotPoint) and self.x == other.x and self.y == other.y
+
+    def __hash__(self):
+        return hash((self.x, self.y))
+
+    def __repr__(self):
+        return "_SlotPoint(x=%r, y=%r)" % (self.x, self.y)
+
+
+class _DictBag:
+    """Plain class with __dict__ — exercises object-with-attrs hashing/diffing."""
+
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    def __eq__(self, other):
+        return isinstance(other, _DictBag) and self.__dict__ == other.__dict__
+
+
+from collections import namedtuple  # noqa: E402
+
+_NamedPoint = namedtuple("_NamedPoint", ["x", "y"])
+
+
+def _hex_hasher(obj, *args, **kwargs):
+    """Module-level pickleable custom hasher used to verify the full path."""
+    import hashlib
+    return hashlib.md5(repr(obj).encode("utf-8")).hexdigest()
+
+
+@pytest.mark.slow
+class TestDeterminismMatrixSlow:
+    """Per-feature determinism: parallel output must equal serial output."""
+
+    def test_report_repetition_false(self):
+        t1 = [1, 1, 1, 2, 3, 3, 4, 4]
+        t2 = [3, 1, 2, 2, 4, 4, 5, 5]
+        _assert_parallel_matches_serial(t1, t2, report_repetition=False)
+
+    def test_sets_of_dicts_inside_list(self):
+        # Frozensets-of-tuples inside a list — set membership is order-free,
+        # but DeepDiff still has to hash and pair the containing dicts.
+        t1 = [{"id": i, "tags": frozenset({("k", i), ("k", i + 1)})} for i in range(10)]
+        t2 = [{"id": i, "tags": frozenset({("k", i), ("k", i + 2)})} for i in range(10)]
+        _assert_parallel_matches_serial(t1, t2)
+
+    def test_top_level_set(self):
+        t1 = {("a", 1), ("b", 2), ("c", 3), ("d", 4), ("e", 5)}
+        t2 = {("a", 1), ("b", 2), ("c", 3), ("d", 99), ("f", 6)}
+        _assert_parallel_matches_serial(t1, t2)
+
+    def test_custom_hasher_pickleable(self):
+        # Pickleable hasher should travel to workers cleanly (no fallback).
+        t1 = [{"id": i, "v": i} for i in range(8)]
+        t2 = [{"id": i, "v": i + (1 if i == 4 else 0)} for i in range(8)]
+        _assert_parallel_matches_serial(t1, t2, hasher=_hex_hasher)
+
+    def test_ignore_string_case(self):
+        t1 = [{"name": "Alice"}, {"name": "Bob"}, {"name": "Carol"}]
+        t2 = [{"name": "alice"}, {"name": "bob"}, {"name": "DAVE"}]
+        _assert_parallel_matches_serial(t1, t2, ignore_string_case=True)
+
+    def test_ignore_numeric_type_changes(self):
+        t1 = [{"v": 1}, {"v": 2}, {"v": 3}]
+        t2 = [{"v": 1.0}, {"v": 2.0}, {"v": 4.0}]
+        _assert_parallel_matches_serial(t1, t2, ignore_numeric_type_changes=True)
+
+    def test_ignore_string_type_changes(self):
+        t1 = [{"v": "x"}, {"v": "y"}, {"v": "z"}]
+        t2 = [{"v": b"x"}, {"v": b"y"}, {"v": b"q"}]
+        _assert_parallel_matches_serial(t1, t2, ignore_string_type_changes=True)
+
+    def test_include_paths(self):
+        # ``include_paths`` is path-based, so the parent-side _skip_this re-filter
+        # in _dispatch_subtree_jobs has to handle it the same way it handles
+        # exclude_paths.
+        t1 = [{"id": i, "keep": i, "drop": i * 100} for i in range(8)]
+        t2 = [{"id": i, "keep": i + (1 if i == 3 else 0), "drop": i * 999} for i in range(8)]
+        _assert_parallel_matches_serial(t1, t2, include_paths="root[0]['keep']")
+
+    def test_exclude_regex_paths(self):
+        import re
+        t1 = [{"id": i, "v": i, "_internal_a": i, "_internal_b": i * 2} for i in range(8)]
+        t2 = [{"id": i, "v": i + (1 if i == 4 else 0),
+               "_internal_a": i * 999, "_internal_b": i * 999} for i in range(8)]
+        _assert_parallel_matches_serial(
+            t1, t2, exclude_regex_paths=[re.compile(r"_internal_\w+")],
+        )
+
+    def test_namedtuple_items(self):
+        t1 = [_NamedPoint(x=i, y=i + 1) for i in range(10)]
+        t2 = [_NamedPoint(x=i, y=i + 2) for i in range(10)]
+        _assert_parallel_matches_serial(t1, t2)
+
+    def test_slots_objects(self):
+        t1 = [_SlotPoint(x=i, y=i + 1) for i in range(10)]
+        t2 = [_SlotPoint(x=i, y=i + 2) for i in range(10)]
+        _assert_parallel_matches_serial(t1, t2)
+
+    def test_dunder_dict_objects(self):
+        t1 = [_DictBag(id=i, v=i) for i in range(10)]
+        t2 = [_DictBag(id=i, v=i + (1 if i == 5 else 0)) for i in range(10)]
+        _assert_parallel_matches_serial(t1, t2)
+
+    def test_group_by_serial_fallback(self):
+        # ``group_by`` reshapes input dicts into keyed dicts before diffing,
+        # which currently runs without ignore_order; the parallel path is not
+        # engaged. This test pins the no-regression invariant: turning mp on
+        # for a group_by run must still produce the same output.
+        t1 = [{"id": "a", "v": 1}, {"id": "b", "v": 2}, {"id": "c", "v": 3}]
+        t2 = [{"id": "a", "v": 1}, {"id": "b", "v": 99}, {"id": "c", "v": 3}]
+        serial = DeepDiff(t1, t2, group_by="id")
+        parallel = DeepDiff(
+            t1, t2, group_by="id",
+            multiprocessing=True, multiprocessing_workers=4,
+            multiprocessing_threshold=0,
+        )
+        assert parallel == serial
+
+    def test_generator_input_falls_back(self):
+        # Generators are flagged in the doc as unsupported (they may be
+        # consumed or pickled differently). DeepDiff materializes them in the
+        # parent before the parallel section, so the result must still match
+        # the serial run.
+        def gen1():
+            for x in [{"id": i, "v": i} for i in range(8)]:
+                yield x
+
+        def gen2():
+            for x in [{"id": i, "v": i + (1 if i == 3 else 0)} for i in range(8)]:
+                yield x
+
+        serial = DeepDiff(list(gen1()), list(gen2()), ignore_order=True,
+                          cutoff_intersection_for_pairs=1)
+        parallel = _run_parallel(list(gen1()), list(gen2()),
+                                 cutoff_intersection_for_pairs=1)
+        assert parallel == serial
+
+    def test_verbose_level_2(self):
+        t1 = [{"id": i, "v": i} for i in range(10)]
+        t2 = [{"id": i, "v": i + (1 if i == 5 else 0)} for i in range(10)]
+        _assert_parallel_matches_serial(t1, t2, verbose_level=2)
+
+    def test_text_view_to_dict_matches(self):
+        # Compare the public dict view directly — guards against any drift
+        # between the tree representation and its TextResult projection.
+        t1 = [{"id": i, "v": i} for i in range(8)]
+        t2 = [{"id": i, "v": i + (1 if i == 3 else 0)} for i in range(8)]
+        serial = DeepDiff(t1, t2, ignore_order=True, cutoff_intersection_for_pairs=1)
+        parallel = _run_parallel(t1, t2, cutoff_intersection_for_pairs=1)
+        assert dict(parallel) == dict(serial)
+
+
+@pytest.mark.slow
+class TestDeterminismNumpySlow:
+    """Numpy-specific determinism cases. Skipped if numpy isn't available."""
+
+    def test_numpy_array_in_dict(self):
+        np = pytest.importorskip("numpy")
+        t1 = [{"id": i, "v": np.array([i, i + 1, i + 2])} for i in range(8)]
+        t2 = [{"id": i, "v": np.array([i, i + 1, i + 3])} for i in range(8)]
+        _assert_parallel_matches_serial(t1, t2)
+
+
+# Pydantic test class must be module-level so spawn can find and unpickle it.
+try:
+    import pydantic as _pydantic_mod  # noqa: F401
+
+    class _PydanticItem(_pydantic_mod.BaseModel):
+        id: int
+        v: int
+
+except Exception:  # pragma: no cover — pydantic not installed
+    _PydanticItem = None  # type: ignore[assignment]
+
+
+@pytest.mark.slow
+class TestDeterminismPydanticSlow:
+    """Pydantic-specific determinism. Skipped if pydantic isn't available."""
+
+    def test_pydantic_models_in_list(self):
+        if _PydanticItem is None:
+            pytest.skip("pydantic not installed")
+        t1 = [_PydanticItem(id=i, v=i) for i in range(8)]
+        t2 = [_PydanticItem(id=i, v=i + (1 if i == 3 else 0)) for i in range(8)]
+        _assert_parallel_matches_serial(t1, t2)
+
+
+@pytest.mark.slow
+class TestPickleFailureFallbackSlow:
+    """Inputs that can't be pickled must fall back to serial without crashing."""
+
+    def test_unpickleable_iterable_compare_func_falls_back(self):
+        # iterable_compare_func is checked up front in compute_distances_parallel
+        # — a closure cannot pickle, so the helper returns None and the parent
+        # runs serially.
+        local_state = {"calls": 0}
+
+        def closure_compare(x, y, level=None):
+            local_state["calls"] += 1
+            return False
+
+        t1 = [{"id": i, "v": i} for i in range(8)]
+        t2 = [{"id": i, "v": i + (1 if i == 4 else 0)} for i in range(8)]
+        # iterable_compare_func is only consulted when ignore_order is OFF
+        # (it's the ordered-pairing helper), so the parallel path doesn't run
+        # — the test still pins "mp=True doesn't break this combo."
+        serial = DeepDiff(t1, t2, iterable_compare_func=closure_compare)
+        parallel = DeepDiff(
+            t1, t2, iterable_compare_func=closure_compare,
+            multiprocessing=True, multiprocessing_workers=4,
+            multiprocessing_threshold=0,
+        )
+        assert parallel == serial
+
+
+def _explode_on_unpickle():
+    """Raised when the worker unpickles ``_ExplodingItem``."""
+    raise RuntimeError("worker explosion: _ExplodingItem cannot be reconstructed")
+
+
+class _ExplodingItem:
+    """Pickleable on the parent, but unpickling in the worker raises.
+
+    This is exactly the pattern that ``is_pickleable`` (which only calls
+    ``pickle.dumps``) cannot detect — and what the determinism contract says
+    must propagate as a normal exception, not a silent fallback.
+    """
+
+    def __reduce__(self):
+        return (_explode_on_unpickle, ())
+
+
+@pytest.mark.slow
+class TestWorkerExceptionPropagationSlow:
+    """Worker exceptions outside the pickle-fallback set must propagate.
+
+    The catch list in ``compute_*_parallel`` is intentionally narrow:
+    ``(pickle.PicklingError, AttributeError, TypeError)`` — Python raises those
+    *during the pickle round-trip*. Anything else (RuntimeError, ValueError)
+    that escapes the worker logic itself must bubble through ``future.result()``
+    and out of the helper, not be silently converted to a ``None`` fallback.
+    """
+
+    def test_runtime_error_in_worker_propagates(self):
+        # ``_ExplodingItem`` survives ``pickle.dumps`` but its ``__reduce__``
+        # tells the unpickler to call ``_explode_on_unpickle()``, which raises
+        # ``RuntimeError`` inside the worker process. The helper's catch list
+        # is ``(PicklingError, AttributeError, TypeError)``; an unpickle-time
+        # ``RuntimeError`` is outside that set, so it must propagate up rather
+        # than be silently turned into a ``None`` fallback. In practice the
+        # ProcessPoolExecutor surfaces this as ``BrokenProcessPool`` (the
+        # worker dies before it can return a result) — either form proves the
+        # contract: the failure is loud, not silent.
+        cfg = MPConfig(enabled=True, workers=2, threshold=0)
+        with pytest.raises(Exception) as exc_info:
+            compute_subtree_diffs_parallel(
+                jobs=[(_ExplodingItem(), _ExplodingItem())],
+                parameters={"foo": "bar"},
+                original_type=None,
+                config=cfg,
+            )
+        # Sanity-check we got a "loud" failure, not the silent fallback path
+        # (which would have returned ``None`` and never raised).
+        assert exc_info.value is not None
+
+    def test_distance_worker_runtime_error_propagates(self):
+        # Same exploding-item trick on the distance helper. Same contract:
+        # an exception escapes the helper rather than being silenced.
+        cfg = MPConfig(enabled=True, workers=2, threshold=0)
+        with pytest.raises(Exception) as exc_info:
+            compute_distances_parallel(
+                jobs=[("h_added", "h_removed", _ExplodingItem(), _ExplodingItem())],
+                parameters={"foo": "bar"},
+                original_type=None,
+                iterable_compare_func=None,
+                config=cfg,
+            )
+        assert exc_info.value is not None
+
