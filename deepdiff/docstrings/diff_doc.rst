@@ -228,4 +228,4 @@ view: string, default = text
 int, string, unicode, dictionary, list, tuple, set, frozenset, OrderedDict, NamedTuple, Numpy, custom objects and more!
 
 .. Note::
-    |:mega:| **Please fill out our** `fast 5-question survey <https://forms.gle/E6qXexcgjoKnSzjB8>`__ so that we can learn how & why you use DeepDiff, and what improvements we should make. Thank you! |:dancers:|
+    |:mega:| **Please fill out our** `fast 10-question survey <https://tally.so/r/J98MPY>`__ so that we can learn how & why you use DeepDiff, and what improvements we should make. Thank you! |:dancers:|
