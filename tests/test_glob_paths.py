@@ -717,3 +717,46 @@ class TestEdgeCases:
         assert "root['b']['x']" in changed
         # root['b']['y'] is NOT covered by either
         assert "root['b']['y']" not in changed
+
+
+class TestGlobMatcherPerformance:
+    """Guards against exponential blowup in the glob matcher.
+
+    Memoization caps the recursion at O(len(pattern) * len(target)) states.
+    Without it, patterns with multiple ``**`` and long targets exploded into
+    hundreds of thousands of recursive calls.
+    """
+
+    def _instrument(self, monkeypatch):
+        counts = {'ms': 0, 'cmd': 0}
+        orig_ms = GlobPathMatcher._match_segments
+        orig_cmd = GlobPathMatcher._could_match_descendant
+
+        def wrap_ms(self, *a, **k):
+            counts['ms'] += 1
+            return orig_ms(self, *a, **k)
+
+        def wrap_cmd(self, *a, **k):
+            counts['cmd'] += 1
+            return orig_cmd(self, *a, **k)
+
+        monkeypatch.setattr(GlobPathMatcher, '_match_segments', wrap_ms)
+        monkeypatch.setattr(GlobPathMatcher, '_could_match_descendant', wrap_cmd)
+        return counts
+
+    def test_match_or_is_descendant_bounded(self, monkeypatch):
+        # Pre-memoization this exact case made ~280k recursive calls.
+        counts = self._instrument(monkeypatch)
+        m = GlobPathMatcher('root' + '[**]' * 5 + "['x']")
+        target = 'root' + ''.join(f'[{i}]' for i in range(20))
+        m.match_or_is_descendant(target)
+        assert counts['ms'] < 5000, f"_match_segments call count regressed: {counts['ms']}"
+
+    def test_match_or_is_ancestor_bounded(self, monkeypatch):
+        counts = self._instrument(monkeypatch)
+        m = GlobPathMatcher('root' + '[**]' * 8)
+        target = 'root' + ''.join(f'[{i}]' for i in range(40)) + "['extra']"
+        m.match_or_is_ancestor(target)
+        assert counts['ms'] + counts['cmd'] < 5000, (
+            f"call count regressed: ms={counts['ms']}, cmd={counts['cmd']}"
+        )

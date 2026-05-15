@@ -389,9 +389,8 @@ class GlobPathMatcher:
 
     def match(self, path_string):
         """Return True if *path_string* matches this pattern exactly."""
-        elements = _path_to_elements(path_string, root_element=('root', GETATTR))
-        target = elements[1:]
-        return self._match_segments(self._pattern, target, 0, 0)
+        target = _path_to_elements(path_string, root_element=('root', GETATTR))[1:]
+        return self._match_segments(target, 0, 0, {}, allow_extra_target=False)
 
     def match_or_is_ancestor(self, path_string):
         """Return True if *path_string* matches OR is an ancestor of a potential match.
@@ -399,79 +398,91 @@ class GlobPathMatcher:
         This is needed for ``include_paths``: we must not prune a path that
         could lead to a matching descendant.
         """
-        elements = _path_to_elements(path_string, root_element=('root', GETATTR))
-        target = elements[1:]
-        return (self._match_segments(self._pattern, target, 0, 0) or
-                self._could_match_descendant(self._pattern, target, 0, 0))
+        target = _path_to_elements(path_string, root_element=('root', GETATTR))[1:]
+        memo = {}
+        return (self._match_segments(target, 0, 0, memo, allow_extra_target=False)
+                or self._could_match_descendant(target, 0, 0, {}))
 
     def match_or_is_descendant(self, path_string):
         """Return True if *path_string* matches OR is a descendant of a matching path.
 
-        This checks whether the pattern matches any prefix of *path_string*,
-        meaning the path is "inside" a matched subtree.
+        Equivalent to: the pattern matches some prefix of *path_string*.
         """
-        elements = _path_to_elements(path_string, root_element=('root', GETATTR))
-        target = elements[1:]
-        # Check exact match first
-        if self._match_segments(self._pattern, target, 0, 0):
-            return True
-        # Check if any prefix of target matches (making this path a descendant)
-        for length in range(len(target)):
-            if self._match_segments(self._pattern, target[:length], 0, 0):
-                return True
-        return False
+        target = _path_to_elements(path_string, root_element=('root', GETATTR))[1:]
+        return self._match_segments(target, 0, 0, {}, allow_extra_target=True)
 
-    @staticmethod
-    def _match_segments(pattern, target, pi, ti):
-        """Recursive segment matcher with backtracking for ``**``."""
-        while pi < len(pattern) and ti < len(target):
+    def _match_segments(self, target, pi, ti, memo, allow_extra_target):
+        """Recursive segment matcher with backtracking for ``**``.
+
+        ``memo`` is a per-top-level-call dict keyed by ``(pi, ti)`` so each
+        state is computed at most once — turns the worst case from
+        exponential to ``O(len(pattern) * len(target))``.
+        """
+        key = (pi, ti)
+        if key in memo:
+            return memo[key]
+        pattern = self._pattern
+        target_len = len(target)
+        pattern_len = len(pattern)
+
+        while pi < pattern_len and ti < target_len:
             pat_elem = pattern[pi][0]
-
-            if pat_elem == MULTI_WILDCARD:
+            if pat_elem is MULTI_WILDCARD:
                 # ** matches zero or more segments — try every suffix
-                for k in range(ti, len(target) + 1):
-                    if GlobPathMatcher._match_segments(pattern, target, pi + 1, k):
+                for k in range(ti, target_len + 1):
+                    if self._match_segments(target, pi + 1, k, memo, allow_extra_target):
+                        memo[key] = True
                         return True
+                memo[key] = False
                 return False
-            elif pat_elem == SINGLE_WILDCARD:
-                # * matches exactly one segment regardless of value/action
+            elif pat_elem is SINGLE_WILDCARD:
                 pi += 1
                 ti += 1
             else:
-                tgt_elem = target[ti][0]
-                if pat_elem != tgt_elem:
+                if pat_elem != target[ti][0]:
+                    memo[key] = False
                     return False
                 pi += 1
                 ti += 1
 
         # Consume any trailing ** (they can match zero segments)
-        while pi < len(pattern) and pattern[pi][0] == MULTI_WILDCARD:
+        while pi < pattern_len and pattern[pi][0] is MULTI_WILDCARD:
             pi += 1
 
-        return pi == len(pattern) and ti == len(target)
+        if allow_extra_target:
+            result = pi == pattern_len
+        else:
+            result = pi == pattern_len and ti == target_len
+        memo[key] = result
+        return result
 
-    @staticmethod
-    def _could_match_descendant(pattern, target, pi, ti):
+    def _could_match_descendant(self, target, pi, ti, memo):
         """Check if *target* is a prefix that could lead to a match deeper down."""
+        key = (pi, ti)
+        if key in memo:
+            return memo[key]
+        pattern = self._pattern
         if ti == len(target):
-            # Target exhausted — it's an ancestor if pattern has remaining segments
-            return pi < len(pattern)
-
+            result = pi < len(pattern)
+            memo[key] = result
+            return result
         if pi >= len(pattern):
+            memo[key] = False
             return False
 
         pat_elem = pattern[pi][0]
-
-        if pat_elem == MULTI_WILDCARD:
-            return (GlobPathMatcher._could_match_descendant(pattern, target, pi + 1, ti) or
-                    GlobPathMatcher._could_match_descendant(pattern, target, pi, ti + 1))
-        elif pat_elem == SINGLE_WILDCARD:
-            return GlobPathMatcher._could_match_descendant(pattern, target, pi + 1, ti + 1)
+        if pat_elem is MULTI_WILDCARD:
+            result = (self._could_match_descendant(target, pi + 1, ti, memo)
+                      or self._could_match_descendant(target, pi, ti + 1, memo))
+        elif pat_elem is SINGLE_WILDCARD:
+            result = self._could_match_descendant(target, pi + 1, ti + 1, memo)
         else:
-            tgt_elem = target[ti][0]
-            if pat_elem != tgt_elem:
+            if pat_elem != target[ti][0]:
+                memo[key] = False
                 return False
-            return GlobPathMatcher._could_match_descendant(pattern, target, pi + 1, ti + 1)
+            result = self._could_match_descendant(target, pi + 1, ti + 1, memo)
+        memo[key] = result
+        return result
 
 
 def compile_glob_paths(paths):
