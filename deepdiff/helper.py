@@ -381,6 +381,30 @@ def add_root_to_paths(paths: Optional[Iterable[str]]) -> Optional[SetOrdered]:
     return result
 
 
+def separate_wildcard_and_exact_paths(paths):
+    """Separate a set of paths into exact paths and wildcard pattern paths.
+
+    Returns ``(exact_set_or_none, wildcard_list_or_none)``.
+    Wildcard paths must start with ``root``; a ``ValueError`` is raised otherwise.
+    """
+    if not paths:
+        return None, None
+    from deepdiff.path import path_has_wildcard, compile_glob_paths
+    exact = set()
+    wildcards = []
+    for path in paths:
+        if path_has_wildcard(path):
+            if not path.startswith('root'):
+                raise ValueError(
+                    "Wildcard paths must start with 'root'. Got: {}".format(path))
+            wildcards.append(path)
+        else:
+            exact.add(path)
+    exact_result = exact if exact else None
+    glob_result = compile_glob_paths(wildcards) if wildcards else None
+    return exact_result, glob_result
+
+
 RE_COMPILED_TYPE = type(re.compile(''))
 
 

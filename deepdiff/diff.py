@@ -29,7 +29,8 @@ from deepdiff.helper import (strings, bytes_type, numbers, uuids, ListItemRemove
                              TEXT_VIEW, TREE_VIEW, DELTA_VIEW, COLORED_VIEW, COLORED_COMPACT_VIEW,
                              detailed__dict__, add_root_to_paths,
                              np, get_truncate_datetime, dict_, CannotCompare, ENUM_INCLUDE_KEYS,
-                             PydanticBaseModel, Opcode, SetOrdered, ipranges)
+                             PydanticBaseModel, Opcode, SetOrdered, ipranges,
+                             separate_wildcard_and_exact_paths)
 from deepdiff.serialization import SerializationMixin
 from deepdiff.distance import DistanceMixin, logarithmic_similarity
 from deepdiff.model import (
@@ -110,7 +111,9 @@ CUTOFF_INTERSECTION_FOR_PAIRS_DEFAULT = 0.7
 DEEPHASH_PARAM_KEYS = (
     'exclude_types',
     'exclude_paths',
+    'exclude_glob_paths',
     'include_paths',
+    'include_glob_paths',
     'exclude_regex_paths',
     'hasher',
     'significant_digits',
@@ -209,6 +212,10 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                  _shared_parameters: Optional[Dict[str, Any]]=None,
                  **kwargs):
         super().__init__()
+        # Defaults for glob path attributes — needed for non-root instances
+        # that may receive _parameters without these keys.
+        self.exclude_glob_paths = None
+        self.include_glob_paths = None
         if kwargs:
             raise ValueError((
                 "The following parameter(s) are not valid: %s\n"
@@ -257,8 +264,12 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 ignore_type_subclasses=ignore_type_subclasses,
                 ignore_uuid_types=ignore_uuid_types)
             self.report_repetition = report_repetition
-            self.exclude_paths = add_root_to_paths(convert_item_or_items_into_set_else_none(exclude_paths))
-            self.include_paths = add_root_to_paths(convert_item_or_items_into_set_else_none(include_paths))
+            _exclude_set = convert_item_or_items_into_set_else_none(exclude_paths)
+            _exclude_exact, self.exclude_glob_paths = separate_wildcard_and_exact_paths(_exclude_set)
+            self.exclude_paths = add_root_to_paths(_exclude_exact)
+            _include_set = convert_item_or_items_into_set_else_none(include_paths)
+            _include_exact, self.include_glob_paths = separate_wildcard_and_exact_paths(_include_set)
+            self.include_paths = add_root_to_paths(_include_exact)
             self.exclude_regex_paths = convert_item_or_items_into_compiled_regexes_else_none(exclude_regex_paths)
             self.exclude_types = set(exclude_types) if exclude_types else None
             self.exclude_types_tuple = tuple(exclude_types) if exclude_types else None  # we need tuple for checking isinstance
@@ -423,7 +434,7 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                     self.__dict__.clear()
 
     def _get_deephash_params(self):
-        result = {key: self._parameters[key] for key in DEEPHASH_PARAM_KEYS}
+        result = {key: self._parameters.get(key) for key in DEEPHASH_PARAM_KEYS}
         result['ignore_repetition'] = not self.report_repetition
         result['number_to_string_func'] = self.number_to_string
         return result
@@ -442,6 +453,8 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         """
 
         if not self._skip_this(change_level):
+            if self._skip_report_for_include_glob(change_level):
+                return
             change_level.report_type = report_type
             tree = self.tree if local_tree is None else local_tree
             tree[report_type].add(change_level)
@@ -461,9 +474,32 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         """
 
         if not self._skip_this(level):
+            if self._skip_report_for_include_glob(level):
+                return
             level.report_type = report_type
             level.additional[CUSTOM_FIELD] = extra_info
             self.tree[report_type].add(level)
+
+    def _skip_report_for_include_glob(self, level):
+        """When include_glob_paths is set, _skip_this allows ancestors through for traversal.
+        This method does a stricter check at report time: only report if the path
+        actually matches a glob pattern or is a descendant of a matching path,
+        or if it already matches an exact include_path."""
+        if not self.include_glob_paths:
+            return False
+        level_path = level.path()
+        # If exact include_paths already matched, don't skip
+        if self.include_paths:
+            if level_path in self.include_paths:
+                return False
+            for prefix in self.include_paths:
+                if prefix in level_path:
+                    return False
+        # Check glob patterns: match or descendant
+        for gp in self.include_glob_paths:
+            if gp.match_or_is_descendant(level_path):
+                return False
+        return True
 
     @staticmethod
     def _dict_from_slots(object: Any) -> Dict[str, Any]:
@@ -552,11 +588,21 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         skip = False
         if self.exclude_paths and level_path in self.exclude_paths:
             skip = True
-        if self.include_paths and level_path != 'root':
-            if level_path not in self.include_paths:
-                skip = True
-                for prefix in self.include_paths:
-                    if prefix in level_path or level_path in prefix:
+        elif self.exclude_glob_paths and any(gp.match(level_path) for gp in self.exclude_glob_paths):
+            skip = True
+        if not skip and (self.include_paths or self.include_glob_paths) and level_path != 'root':
+            skip = True
+            if self.include_paths:
+                if level_path in self.include_paths:
+                    skip = False
+                else:
+                    for prefix in self.include_paths:
+                        if prefix in level_path or level_path in prefix:
+                            skip = False
+                            break
+            if skip and self.include_glob_paths:
+                for gp in self.include_glob_paths:
+                    if gp.match_or_is_ancestor(level_path):
                         skip = False
                         break
         elif self.exclude_regex_paths and any(
@@ -586,28 +632,34 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
 
     def _skip_this_key(self, level: Any, key: Any) -> bool:
         # if include_paths is not set, than treet every path as included
-        if self.include_paths is None:
+        if self.include_paths is None and self.include_glob_paths is None:
             return False
-        if "{}['{}']".format(level.path(), key) in self.include_paths:
-            return False
-        if level.path() in self.include_paths:
-            # matches e.g. level+key root['foo']['bar']['veg'] include_paths ["root['foo']['bar']"]
-            return False
-        for prefix in self.include_paths:
-            if "{}['{}']".format(level.path(), key) in prefix:
-                # matches as long the prefix is longer than this object key
-                # eg.: level+key root['foo']['bar'] matches prefix root['foo']['bar'] from include paths
-                #      level+key root['foo'] matches prefix root['foo']['bar'] from include_paths
-                #      level+key root['foo']['bar'] DOES NOT match root['foo'] from include_paths This needs to be handled afterwards
+        key_path = "{}['{}']".format(level.path(), key)
+        if self.include_paths:
+            if key_path in self.include_paths:
                 return False
-        # check if a higher level is included as a whole (=without any sublevels specified)
-        # matches e.g. level+key root['foo']['bar']['veg'] include_paths ["root['foo']"]
-        # but does not match, if it is level+key root['foo']['bar']['veg'] include_paths ["root['foo']['bar']['fruits']"]
-        up = level.up
-        while up is not None:
-            if up.path() in self.include_paths:
+            if level.path() in self.include_paths:
+                # matches e.g. level+key root['foo']['bar']['veg'] include_paths ["root['foo']['bar']"]
                 return False
-            up = up.up
+            for prefix in self.include_paths:
+                if key_path in prefix:
+                    # matches as long the prefix is longer than this object key
+                    # eg.: level+key root['foo']['bar'] matches prefix root['foo']['bar'] from include paths
+                    #      level+key root['foo'] matches prefix root['foo']['bar'] from include_paths
+                    #      level+key root['foo']['bar'] DOES NOT match root['foo'] from include_paths This needs to be handled afterwards
+                    return False
+            # check if a higher level is included as a whole (=without any sublevels specified)
+            # matches e.g. level+key root['foo']['bar']['veg'] include_paths ["root['foo']"]
+            # but does not match, if it is level+key root['foo']['bar']['veg'] include_paths ["root['foo']['bar']['fruits']"]
+            up = level.up
+            while up is not None:
+                if up.path() in self.include_paths:
+                    return False
+                up = up.up
+        if self.include_glob_paths:
+            for gp in self.include_glob_paths:
+                if gp.match_or_is_ancestor(key_path):
+                    return False
         return True
 
     def _get_clean_to_keys_mapping(self, keys: Any, level: Any) -> Dict[Any, Any]:
@@ -701,9 +753,13 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         t_keys_removed = t1_keys - t_keys_intersect
 
         if self.threshold_to_diff_deeper:
-            if self.exclude_paths:
+            if self.exclude_paths or self.exclude_glob_paths:
                 t_keys_union = {f"{level.path()}[{repr(key)}]" for key in (t2_keys | t1_keys)}
-                t_keys_union -= self.exclude_paths
+                if self.exclude_paths:
+                    t_keys_union -= self.exclude_paths
+                if self.exclude_glob_paths:
+                    t_keys_union = {k for k in t_keys_union
+                                    if not any(gp.match(k) for gp in self.exclude_glob_paths)}
                 t_keys_union_len = len(t_keys_union)
             else:
                 t_keys_union_len = len(t2_keys | t1_keys)
