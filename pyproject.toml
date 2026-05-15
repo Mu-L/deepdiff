@@ -102,5 +102,18 @@ statistics = true
 ignore = "E202"
 exclude = "./data,./src,.svn,CVS,.bzr,.hg,.git,__pycache__"
 
+[tool.flit.sdist]
+include = [
+  "AUTHORS.md",
+  "CHANGELOG.md",
+  "CITATION.cff",
+  "conftest.py",
+  "docs/",
+  "mypy.ini",
+  "noxfile.py",
+  "tests/",
+  "uv.lock",
+]
+
 [tool.pytest.ini_options]
 addopts = "--pdbcls=IPython.terminal.debugger:Pdb"
