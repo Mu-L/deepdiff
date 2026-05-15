@@ -46,7 +46,9 @@ class TestCache:
             "MAX PASS LIMIT REACHED": False,
             "MAX DIFF LIMIT REACHED": False,
         }
-        assert not DeepDiff(expected_stats, stats, use_log_scale=True)
+        # Worker-prefixed keys come from multiprocessing and are non-deterministic.
+        filtered_stats = {k: v for k, v in stats.items() if not k.startswith("WORKER ")}
+        assert not DeepDiff(expected_stats, filtered_stats, use_log_scale=True)
         assert nested_a_result == diff
         diff_of_diff = DeepDiff(nested_a_result, diff.to_dict(), ignore_order=False)
         assert not diff_of_diff
