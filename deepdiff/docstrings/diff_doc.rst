@@ -53,6 +53,7 @@ encodings: List, default = None
 exclude_paths: list, default = None
     :ref:`exclude_paths_label`
     List of paths to exclude from the report. If only one item, you can path it as a string.
+    Supports :ref:`wildcard_paths_label`: use ``[*]`` to match one segment or ``[**]`` to match any depth.
 
 exclude_regex_paths: list, default = None
     :ref:`exclude_regex_paths_label`
@@ -74,6 +75,7 @@ exclude_obj_callback_strict: function, default = None
 include_paths: list, default = None
     :ref:`include_paths_label`
     List of the only paths to include in the report. If only one item is in the list, you can pass it as a string.
+    Supports :ref:`wildcard_paths_label`: use ``[*]`` to match one segment or ``[**]`` to match any depth.
 
 include_obj_callback: function, default = None
     :ref:`include_obj_callback_label`
@@ -228,4 +230,4 @@ view: string, default = text
 int, string, unicode, dictionary, list, tuple, set, frozenset, OrderedDict, NamedTuple, Numpy, custom objects and more!
 
 .. Note::
-    |:mega:| **Please fill out our** `fast 5-question survey <https://forms.gle/E6qXexcgjoKnSzjB8>`__ so that we can learn how & why you use DeepDiff, and what improvements we should make. Thank you! |:dancers:|
+    |:mega:| **Please fill out our** `fast 10-question survey <https://tally.so/r/J98MPY>`__ so that we can learn how & why you use DeepDiff, and what improvements we should make. Thank you! |:dancers:|

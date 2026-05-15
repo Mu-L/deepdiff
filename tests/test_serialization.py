@@ -542,7 +542,7 @@ class TestDeepDiffPretty:
         (4, Decimal(2017.1), None),
         (5, {1, 2, 10}, set),
         (6, datetime.datetime(2023, 10, 11), datetime.datetime.fromisoformat),
-        (7, datetime.datetime.utcnow(), datetime.datetime.fromisoformat),
+        (7, datetime.datetime.now(datetime.timezone.utc), datetime.datetime.fromisoformat),
         (8, field_stats1, lambda x: SomeStats(**x)),
         (9, np.array([[ 101, 3533, 1998, 4532, 2024, 3415, 1012,  102]]), np.array),
         (10, memoryview(b"hello"), lambda x: memoryview(x.encode('utf-8'))),

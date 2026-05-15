@@ -1,5 +1,19 @@
 # DeepDiff Change log
 
+- v9-1-0
+    - Added multiprocessing support for DeepDiff: parallel distance computation and parallel subtree diffing with aggregated worker stats, deterministic ordering, and automatic fallback to serial when unsafe (e.g. `custom_operators`, `*_obj_callback`, `ignore_order_func`)
+    - Added wildcard/glob pattern support for `exclude_paths` and `include_paths` thanks to [akshat62](https://github.com/akshat62)
+    - Reimplemented internal cache for improved performance
+    - Memoized `GlobPathMatcher` to remove exponential-time matching cliff
+    - Comprehensive type-hint corrections across `deephash.py`, `helper.py`, `delta.py`, `diff.py`, `distance.py`, `path.py`, and `serialization.py` (also fixed real bugs: misplaced paren in `path._guess_type` call, and `len(other.indexes > 1)` → `len(other.indexes) > 1` in `diff._compare_in_order`)
+    - Security: Delta dunder-attribute traversal in `check_elem()` now raises immediately instead of going through `_raise_or_log()`, with full-path preflight validation in `_get_elements_and_details()` so the `set_item_added` path cannot silently skip malicious dunder paths
+    - Fixed nested NamedTuple set/frozenset Delta updates dropping the outer container
+    - Fixed tuple Deltas using iterable opcodes silently doing nothing for insert/delete-only changes
+    - Fixed Delta with both moved and added iterable items mutating the Delta's own internal diff data
+    - Fixed crash during path sorting when removing multiple dictionary items with complex keys
+    - Packaging: added missing files to sdist and removed obsolete `MANIFEST.in` thanks to [mgorny](https://github.com/mgorny)
+    - Updated GitHub Actions workflows and dependencies
+
 - v9-0-0
     - migration note:
         - `to_dict()` and `to_json()` now accept a `verbose_level` parameter and always return a usable text-view dict. When the original view is `'tree'`, they default to `verbose_level=2` for full detail. The old `view_override` parameter is removed. To get the previous results, you will need to pass the explicit verbose_level to `to_json` and `to_dict` if you are using the tree view.

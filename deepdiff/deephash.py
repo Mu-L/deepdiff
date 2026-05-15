@@ -14,7 +14,9 @@ from deepdiff.helper import (strings, numbers, only_numbers, times, unprocessed,
                              convert_item_or_items_into_compiled_regexes_else_none,
                              get_id, type_is_subclass_of_type_group, type_in_type_group,
                              number_to_string, datetime_normalize, KEY_TO_VAL_STR,
-                             get_truncate_datetime, dict_, add_root_to_paths, PydanticBaseModel)
+                             get_truncate_datetime, dict_, add_root_to_paths, PydanticBaseModel,
+                             separate_wildcard_and_exact_paths,
+                             SetOrdered)
 
 from deepdiff.base import Base
 
@@ -159,8 +161,8 @@ class DeepHash(Base):
     hashes: Dict[Any, Any]
     exclude_types_tuple: Tuple[type, ...]
     ignore_repetition: bool
-    exclude_paths: Optional[Set[str]]
-    include_paths: Optional[Set[str]]
+    exclude_paths: Optional[SetOrdered]
+    include_paths: Optional[SetOrdered]
     exclude_regex_paths: Optional[List[re.Pattern[str]]]
     hasher: Callable[[Union[str, bytes]], str]
     use_enum_value: bool
@@ -189,6 +191,7 @@ class DeepHash(Base):
                  custom_operators: Optional[List[Any]] = None,
                  default_timezone: Union[datetime.timezone, "BaseTzInfo"] = datetime.timezone.utc,
                  encodings: Optional[List[str]] = None,
+                 exclude_glob_paths: Optional[List[Any]] = None,
                  exclude_obj_callback: Optional[Callable[[Any, str], bool]] = None,
                  exclude_paths: Optional[PathType] = None,
                  exclude_regex_paths: Optional[RegexType] = None,
@@ -205,6 +208,7 @@ class DeepHash(Base):
                  ignore_type_in_groups: Any = None,
                  ignore_type_subclasses: bool = False,
                  ignore_uuid_types: bool = False,
+                 include_glob_paths: Optional[List[Any]] = None,
                  include_paths: Optional[PathType] = None,
                  number_format_notation: str = "f",
                  number_to_string_func: Optional[NumberToStringFunc] = None,
@@ -231,8 +235,14 @@ class DeepHash(Base):
         exclude_types = set() if exclude_types is None else set(exclude_types)
         self.exclude_types_tuple = tuple(exclude_types)  # we need tuple for checking isinstance
         self.ignore_repetition = ignore_repetition
-        self.exclude_paths = add_root_to_paths(convert_item_or_items_into_set_else_none(exclude_paths))
-        self.include_paths = add_root_to_paths(convert_item_or_items_into_set_else_none(include_paths))
+        _exclude_set = convert_item_or_items_into_set_else_none(exclude_paths)
+        _exclude_exact, _exclude_globs = separate_wildcard_and_exact_paths(_exclude_set)
+        self.exclude_paths = add_root_to_paths(_exclude_exact)
+        self.exclude_glob_paths = exclude_glob_paths or _exclude_globs
+        _include_set = convert_item_or_items_into_set_else_none(include_paths)
+        _include_exact, _include_globs = separate_wildcard_and_exact_paths(_include_set)
+        self.include_paths = add_root_to_paths(_include_exact)
+        self.include_glob_paths = include_glob_paths or _include_globs
         self.exclude_regex_paths = convert_item_or_items_into_compiled_regexes_else_none(exclude_regex_paths)
         self.hasher = default_hasher if hasher is None else hasher
         self.hashes[UNPROCESSED_KEY] = []  # type: ignore
@@ -461,11 +471,21 @@ class DeepHash(Base):
         skip = False
         if self.exclude_paths and parent in self.exclude_paths:
             skip = True
-        if self.include_paths and parent != 'root':
-            if parent not in self.include_paths:
-                skip = True
-                for prefix in self.include_paths:
-                    if parent.startswith(prefix):
+        elif self.exclude_glob_paths and any(gp.match(parent) for gp in self.exclude_glob_paths):
+            skip = True
+        if (self.include_paths or self.include_glob_paths) and parent != 'root':
+            skip = True
+            if self.include_paths:
+                if parent in self.include_paths:
+                    skip = False
+                else:
+                    for prefix in self.include_paths:
+                        if parent.startswith(prefix):
+                            skip = False
+                            break
+            if skip and self.include_glob_paths:
+                for gp in self.include_glob_paths:
+                    if gp.match_or_is_ancestor(parent):
                         skip = False
                         break
         elif self.exclude_regex_paths and any(

@@ -128,6 +128,8 @@ Authors in order of the timeline of their contributions:
 - `srini047 <https://github.com/srini047>`__ for fixing README typo.
 - `Nagato-Yuzuru <https://github.com/Nagato-Yuzuru>`__ for colored view tests.
 - `akshat62 <https://github.com/akshat62>`__ for adding Fraction numeric support.
+- `akshat62 <https://github.com/akshat62>`__ for adding wildcard/glob pattern support for ``exclude_paths`` and ``include_paths``.
+- `mgorny <https://github.com/mgorny>`__ for adding missing files to sdist and removing obsolete ``MANIFEST.in``.
 
 
 .. _Sep Dehpour (Seperman): http://www.zepworks.com

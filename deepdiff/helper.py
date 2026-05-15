@@ -239,16 +239,42 @@ class OtherTypes:
     __str__ = __repr__
 
 
+# Sentinels below carry meaning by *identity*, not equality — e.g.
+# ``change.t2 is not notpresent`` in TextResult selects t2-vs-t1 reporting.
+# Pickle, however, makes a fresh instance on unpickle, which would silently
+# break those identity checks across process boundaries (multiprocessing).
+# ``__reduce__`` rewires unpickle to return the parent process's singleton,
+# preserving ``is`` semantics under spawn-based multiprocessing.
+
+def _resolve_skipped():
+    return skipped
+
+
+def _resolve_unprocessed():
+    return unprocessed
+
+
+def _resolve_not_hashed():
+    return not_hashed
+
+
+def _resolve_notpresent():
+    return notpresent
+
+
 class Skipped(OtherTypes):
-    pass
+    def __reduce__(self):
+        return (_resolve_skipped, ())
 
 
 class Unprocessed(OtherTypes):
-    pass
+    def __reduce__(self):
+        return (_resolve_unprocessed, ())
 
 
 class NotHashed(OtherTypes):
-    pass
+    def __reduce__(self):
+        return (_resolve_not_hashed, ())
 
 
 class NotPresent:  # pragma: no cover
@@ -257,6 +283,9 @@ class NotPresent:  # pragma: no cover
     in the future.
     We previously used None for this but this caused problem when users actually added and removed None. Srsly guys? :D
     """
+
+    def __reduce__(self):
+        return (_resolve_notpresent, ())
 
     def __repr__(self) -> str:
         return 'not present'  # pragma: no cover
@@ -313,7 +342,7 @@ class indexed_set(set):
     """
 
 
-def add_to_frozen_set(parents_ids: FrozenSet[int], item_id: int) -> FrozenSet[int]:
+def add_to_frozen_set(parents_ids: FrozenSet[Any], item_id: Any) -> FrozenSet[Any]:
     return parents_ids | {item_id}
 
 
@@ -352,6 +381,30 @@ def add_root_to_paths(paths: Optional[Iterable[str]]) -> Optional[SetOrdered]:
     return result
 
 
+def separate_wildcard_and_exact_paths(paths):
+    """Separate a set of paths into exact paths and wildcard pattern paths.
+
+    Returns ``(exact_set_or_none, wildcard_list_or_none)``.
+    Wildcard paths must start with ``root``; a ``ValueError`` is raised otherwise.
+    """
+    if not paths:
+        return None, None
+    from deepdiff.path import path_has_wildcard, compile_glob_paths
+    exact = set()
+    wildcards = []
+    for path in paths:
+        if path_has_wildcard(path):
+            if not path.startswith('root'):
+                raise ValueError(
+                    "Wildcard paths must start with 'root'. Got: {}".format(path))
+            wildcards.append(path)
+        else:
+            exact.add(path)
+    exact_result = exact if exact else None
+    glob_result = compile_glob_paths(wildcards) if wildcards else None
+    return exact_result, glob_result
+
+
 RE_COMPILED_TYPE = type(re.compile(''))
 
 
@@ -386,14 +439,15 @@ def numpy_dtype_string_to_type(dtype_str: str) -> Type[Any]:
     return numpy_dtype_str_to_type[dtype_str]
 
 
-def type_in_type_group(item: Any, type_group: Tuple[Type[Any], ...]) -> bool:
+def type_in_type_group(item: Any, type_group: Iterable[Type[Any]]) -> bool:
     return get_type(item) in type_group
 
 
-def type_is_subclass_of_type_group(item: Any, type_group: Tuple[Type[Any], ...]) -> bool:
-    return isinstance(item, type_group) \
-        or (isinstance(item, type) and issubclass(item, type_group)) \
-        or type_in_type_group(item, type_group)
+def type_is_subclass_of_type_group(item: Any, type_group: Iterable[Type[Any]]) -> bool:
+    type_group_tuple = tuple(type_group)
+    return isinstance(item, type_group_tuple) \
+        or (isinstance(item, type) and issubclass(item, type_group_tuple)) \
+        or type_in_type_group(item, type_group_tuple)
 
 
 def get_doc(doc_filename: str) -> str:

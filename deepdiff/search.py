@@ -6,7 +6,8 @@ from deepdiff.helper import SetOrdered
 import logging
 
 from deepdiff.helper import (
-    strings, numbers, add_to_frozen_set, get_doc, dict_, RE_COMPILED_TYPE, ipranges
+    strings, numbers, add_to_frozen_set, get_doc, dict_, RE_COMPILED_TYPE, ipranges,
+    separate_wildcard_and_exact_paths,
 )
 
 
@@ -106,7 +107,8 @@ class DeepSearch(Dict[str, Union[Dict[str, Any], SetOrdered, List[str]]]):
         self.obj: Any = obj
         self.case_sensitive: bool = case_sensitive if isinstance(item, strings) else True
         item = item if self.case_sensitive else (item.lower() if isinstance(item, str) else item)
-        self.exclude_paths: SetOrdered = SetOrdered(exclude_paths)
+        _exclude_exact, self.exclude_glob_paths = separate_wildcard_and_exact_paths(set(exclude_paths) if exclude_paths else None)
+        self.exclude_paths: SetOrdered = SetOrdered(_exclude_exact) if _exclude_exact else SetOrdered()
         self.exclude_regex_paths: List[Pattern[str]] = [re.compile(exclude_regex_path) for exclude_regex_path in exclude_regex_paths]
         self.exclude_types: SetOrdered = SetOrdered(exclude_types)
         self.exclude_types_tuple: tuple[type, ...] = tuple(
@@ -192,6 +194,8 @@ class DeepSearch(Dict[str, Union[Dict[str, Any], SetOrdered, List[str]]]):
     def __skip_this(self, item: Any, parent: str) -> bool:
         skip = False
         if parent in self.exclude_paths:
+            skip = True
+        elif self.exclude_glob_paths and any(gp.match(parent) for gp in self.exclude_glob_paths):
             skip = True
         elif self.exclude_regex_paths and any(
                 [exclude_regex_path.search(parent) for exclude_regex_path in self.exclude_regex_paths]):

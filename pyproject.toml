@@ -6,6 +6,7 @@ build-backend = "flit_core.buildapi"
 name = "deepdiff"
 version = "9.0.0"
 dependencies = [
+  "cachebox>=5.2,<6",
   "orderly-set>=5.5.0,<6",
 ]
 requires-python = ">=3.10"
@@ -72,7 +73,7 @@ static = [
   "pydantic~=2.12.5",
 ]
 test = [
-  "pytest~=9.0.2",
+  "pytest~=9.0.3",
   "pytest-benchmark~=5.2.3",
   "pytest-cov~=7.1.0",
   "python-dotenv~=1.2.2",
@@ -100,6 +101,25 @@ builtins = "json"
 statistics = true
 ignore = "E202"
 exclude = "./data,./src,.svn,CVS,.bzr,.hg,.git,__pycache__"
+
+[tool.flit.sdist]
+include = [
+  "AUTHORS.md",
+  "CHANGELOG.md",
+  "CITATION.cff",
+  "conftest.py",
+  "docs/",
+  "mypy.ini",
+  "noxfile.py",
+  "tests/",
+]
+exclude = [
+  "docs/.env",
+  "docs/_build/",
+  "docs/**/*.png",
+  "docs/CLAUDE.md",
+  "docs/AGENTS.md",
+]
 
 [tool.pytest.ini_options]
 addopts = "--pdbcls=IPython.terminal.debugger:Pdb"

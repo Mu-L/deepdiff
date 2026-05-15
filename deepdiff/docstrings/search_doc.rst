@@ -14,6 +14,7 @@ verbose_level : int >= 0, default = 1.
 
 exclude_paths: list, default = None.
     List of paths to exclude from the report.
+    Supports wildcard patterns: use ``[*]`` to match one segment or ``[**]`` to match any depth.
 
 exclude_types: list, default = None.
     List of object types to exclude from the report.

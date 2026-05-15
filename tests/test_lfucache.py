@@ -1,33 +1,35 @@
 import random
-import pytest
 import concurrent.futures
-from deepdiff.lfucache import LFUCache
+from deepdiff.helper import not_found
+from deepdiff.lfucache import DistanceCache
 
 
-class TestLFUcache:
+class TestDistanceCache:
 
-    @pytest.mark.parametrize("items, size, expected_results, expected_freq", [
-        (['a', 'a', 'b', 'a', 'c', 'b', 'd'], 3, [('b', 2), ('c', 1), ('d', 1)], '1.333'),
-        (['a', 'a', 'b', 'a', 'c', 'b', 'd', 'e', 'c', 'b'], 3, [('b', 3), ('d', 1), ('e', 1)], '1.666'),
-        (['a', 'a', 'b', 'a', 'c', 'b', 'd', 'e', 'c', 'b', 'b', 'c', 'd', 'b'], 3, [('b', 5), ('c', 3), ('d', 2)], '3.333'),
-    ])
-    def test_lfu(self, items, size, expected_results, expected_freq, benchmark):
-        benchmark(self._test_lfu, items, size, expected_results, expected_freq)
+    def test_lru_cache(self, benchmark):
+        benchmark(self._test_lru_cache)
 
-    def _test_lfu(self, items, size, expected_results, expected_freq):
-        lfucache = LFUCache(size)
-        for item in items:
-            lfucache.set(item, value='{}_cached'.format(item))
-        for item in items:
-            lfucache.get(item)
-        results = lfucache.get_sorted_cache_keys()
-        assert expected_results == results
-        freq = lfucache.get_average_frequency()
-        assert expected_freq == str(freq)[:5]
+    def _test_lru_cache(self):
+        cache = DistanceCache(2)
+        cache.set('a', value='a_cached')
+        cache.set('b', value='b_cached')
+        assert 'a' in cache
+        assert cache.get('a') == 'a_cached'
+        cache.set('c', value='c_cached')
+        assert cache.get('a') == 'a_cached'
+        assert cache.get('b') is not_found
+        assert cache.get('c') == 'c_cached'
+        assert cache.get('missing') is not_found
+
+    def test_report_type_values_are_accumulated(self):
+        cache = DistanceCache(2)
+        cache.set('a', report_type='values_changed', value='root[0]')
+        cache.set('a', report_type='values_changed', value='root[1]')
+        assert cache.get('a') == {'values_changed': {'root[0]', 'root[1]'}}
 
     def test_get_multithreading(self):
         keys = 'aaaaaaaaaaaaaaaaaaaaaaaaaaabbc'
-        lfucache = LFUCache(2)
+        cache = DistanceCache(2)
 
         def _do_set(cache, key):
             cache.set(key, value='{}_cached'.format(key))
@@ -45,6 +47,6 @@ class TestLFUcache:
             return random.choice([_do_get, _do_get, _do_set])(cache, key)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-            futures = (executor.submit(_random_func, lfucache, key) for key in _key_gen())
+            futures = (executor.submit(_random_func, cache, key) for key in _key_gen())
             for future in concurrent.futures.as_completed(futures):
                 future.result()

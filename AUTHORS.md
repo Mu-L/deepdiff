@@ -86,3 +86,5 @@ Authors in order of the timeline of their contributions:
 - [srini047](https://github.com/srini047) for fixing README typo.
 - [Nagato-Yuzuru](https://github.com/Nagato-Yuzuru) for colored view tests.
 - [akshat62](https://github.com/akshat62) for adding Fraction numeric support.
+- [akshat62](https://github.com/akshat62) for adding wildcard/glob pattern support for `exclude_paths` and `include_paths`.
+- [mgorny](https://github.com/mgorny) for adding missing files to sdist and removing obsolete `MANIFEST.in`.

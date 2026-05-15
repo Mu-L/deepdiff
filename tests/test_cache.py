@@ -40,13 +40,15 @@ class TestCache:
         stats = diff.get_stats()
         # Somehow just in python 3.5 the cache stats are different. Weird.
         expected_stats = {
-            'PASSES COUNT': 3960,
-            'DIFF COUNT': 19469,
-            'DISTANCE CACHE HIT COUNT': 11847,
-            'MAX PASS LIMIT REACHED': False,
-            'MAX DIFF LIMIT REACHED': False
+            "PASSES COUNT": 5324,
+            "DIFF COUNT": 28020,
+            "DISTANCE CACHE HIT COUNT": 17243,
+            "MAX PASS LIMIT REACHED": False,
+            "MAX DIFF LIMIT REACHED": False,
         }
-        assert not DeepDiff(expected_stats, stats, use_log_scale=True)
+        # Worker-prefixed keys come from multiprocessing and are non-deterministic.
+        filtered_stats = {k: v for k, v in stats.items() if not k.startswith("WORKER ")}
+        assert not DeepDiff(expected_stats, filtered_stats, use_log_scale=True)
         assert nested_a_result == diff
         diff_of_diff = DeepDiff(nested_a_result, diff.to_dict(), ignore_order=False)
         assert not diff_of_diff
@@ -63,7 +65,12 @@ class TestCache:
             'DIFF COUNT': 306,
             'DISTANCE CACHE HIT COUNT': 0,
             'MAX PASS LIMIT REACHED': False,
-            'MAX DIFF LIMIT REACHED': False
+            'MAX DIFF LIMIT REACHED': False,
+            # Phase 4: zeroed worker aggregates always present in get_stats().
+            'WORKER DIFF COUNT': 0,
+            'WORKER PASSES COUNT': 0,
+            'WORKER DISTANCE CACHE HIT COUNT': 0,
+            'WORKER BATCH COUNT': 0,
         }
         stats_diff = DeepDiff(expected_stats, stats, use_log_scale=True, log_scale_similarity_threshold=0.15)
         assert not stats_diff
@@ -93,7 +100,12 @@ class TestCache:
             'DIFF COUNT': 50,
             'DISTANCE CACHE HIT COUNT': 0,
             'MAX PASS LIMIT REACHED': False,
-            'MAX DIFF LIMIT REACHED': False
+            'MAX DIFF LIMIT REACHED': False,
+            # Phase 4: zeroed worker aggregates always present in get_stats().
+            'WORKER DIFF COUNT': 0,
+            'WORKER PASSES COUNT': 0,
+            'WORKER DISTANCE CACHE HIT COUNT': 0,
+            'WORKER BATCH COUNT': 0,
         }
         assert expected_stats == stats
 
@@ -123,7 +135,12 @@ class TestCache:
             'DIFF COUNT': 16,
             'DISTANCE CACHE HIT COUNT': 0,
             'MAX PASS LIMIT REACHED': False,
-            'MAX DIFF LIMIT REACHED': False
+            'MAX DIFF LIMIT REACHED': False,
+            # Phase 4: zeroed worker aggregates always present in get_stats().
+            'WORKER DIFF COUNT': 0,
+            'WORKER PASSES COUNT': 0,
+            'WORKER DISTANCE CACHE HIT COUNT': 0,
+            'WORKER BATCH COUNT': 0,
         }
         assert expected_stats == stats
 

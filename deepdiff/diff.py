@@ -13,13 +13,13 @@ import uuid
 from enum import Enum
 from copy import deepcopy
 from math import isclose as is_close
-from typing import List, Dict, Callable, Union, Any, Pattern, Tuple, Optional, Set, FrozenSet, TYPE_CHECKING, Protocol, Literal
+from typing import List, Dict, Callable, Union, Any, Pattern, Tuple, Optional, Set, FrozenSet, TYPE_CHECKING, Protocol, Literal, cast
 from collections.abc import Mapping, Iterable, Sequence
 from collections import defaultdict
 from inspect import getmembers
 from itertools import zip_longest
 from functools import lru_cache
-from deepdiff.helper import (strings, bytes_type, numbers, uuids, ListItemRemovedOrAdded, notpresent,
+from deepdiff.helper import (strings, bytes_type, numbers, uuids, ListItemRemovedOrAdded, notpresent, not_found,
                              IndexedHash, unprocessed, add_to_frozen_set, basic_types,
                              convert_item_or_items_into_set_else_none, get_type,
                              convert_item_or_items_into_compiled_regexes_else_none,
@@ -29,7 +29,8 @@ from deepdiff.helper import (strings, bytes_type, numbers, uuids, ListItemRemove
                              TEXT_VIEW, TREE_VIEW, DELTA_VIEW, COLORED_VIEW, COLORED_COMPACT_VIEW,
                              detailed__dict__, add_root_to_paths,
                              np, get_truncate_datetime, dict_, CannotCompare, ENUM_INCLUDE_KEYS,
-                             PydanticBaseModel, Opcode, SetOrdered, ipranges)
+                             PydanticBaseModel, Opcode, SetOrdered, ipranges,
+                             separate_wildcard_and_exact_paths)
 from deepdiff.serialization import SerializationMixin
 from deepdiff.distance import DistanceMixin, logarithmic_similarity
 from deepdiff.model import (
@@ -37,12 +38,16 @@ from deepdiff.model import (
     DictRelationship, AttributeRelationship, REPORT_KEYS,
     SubscriptableIterableRelationship, NonSubscriptableIterableRelationship,
     SetRelationship, NumpyArrayRelationship, CUSTOM_FIELD,
-    FORCE_DEFAULT,
+    FORCE_DEFAULT, ChildRelationship,
 )
 from deepdiff.deephash import DeepHash, combine_hashes_lists
 from deepdiff.base import Base
 from deepdiff.lfucache import LFUCache, DummyLFU
 from deepdiff.colored_view import ColoredView
+from deepdiff._multiprocessing import (
+    normalize_mp_config, compute_distances_parallel,
+    compute_hashes_parallel, compute_subtree_diffs_parallel,
+)
 
 if TYPE_CHECKING:
     from pytz.tzinfo import BaseTzInfo
@@ -82,6 +87,10 @@ MAX_DIFF_LIMIT_REACHED = 'MAX DIFF LIMIT REACHED'
 DISTANCE_CACHE_ENABLED = 'DISTANCE CACHE ENABLED'
 PREVIOUS_DIFF_COUNT = 'PREVIOUS DIFF COUNT'
 PREVIOUS_DISTANCE_CACHE_HIT_COUNT = 'PREVIOUS DISTANCE CACHE HIT COUNT'
+WORKER_DIFF_COUNT = 'WORKER DIFF COUNT'
+WORKER_PASSES_COUNT = 'WORKER PASSES COUNT'
+WORKER_DISTANCE_CACHE_HIT_COUNT = 'WORKER DISTANCE CACHE HIT COUNT'
+WORKER_BATCH_COUNT = 'WORKER BATCH COUNT'
 CANT_FIND_NUMPY_MSG = 'Unable to import numpy. This must be a bug in DeepDiff since a numpy array is detected.'
 INVALID_VIEW_MSG = "view parameter must be one of 'text', 'tree', 'delta', 'colored' or 'colored_compact'. But {} was passed."
 CUTOFF_RANGE_ERROR_MSG = 'cutoff_distance_for_pairs needs to be a positive float max 1.'
@@ -102,7 +111,9 @@ CUTOFF_INTERSECTION_FOR_PAIRS_DEFAULT = 0.7
 DEEPHASH_PARAM_KEYS = (
     'exclude_types',
     'exclude_paths',
+    'exclude_glob_paths',
     'include_paths',
+    'include_glob_paths',
     'exclude_regex_paths',
     'hasher',
     'significant_digits',
@@ -182,6 +193,9 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                  math_epsilon: Optional[float]=None,
                  max_diffs: Optional[int]=None,
                  max_passes: int=10000000,
+                 multiprocessing: bool=False,
+                 multiprocessing_workers: Optional[int]=None,
+                 multiprocessing_threshold: Optional[int]=None,
                  number_format_notation: Literal["f", "e"]="f",
                  number_to_string_func: Optional[Callable]=None,
                  progress_logger: Callable[[str], None]=logger.info,
@@ -198,6 +212,10 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                  _shared_parameters: Optional[Dict[str, Any]]=None,
                  **kwargs):
         super().__init__()
+        # Defaults for glob path attributes — needed for non-root instances
+        # that may receive _parameters without these keys.
+        self.exclude_glob_paths = None
+        self.include_glob_paths = None
         if kwargs:
             raise ValueError((
                 "The following parameter(s) are not valid: %s\n"
@@ -210,6 +228,7 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 "cache_tuning_sample_size, get_deep_distance, group_by, group_by_sort_key, cache_purge_level, log_stacktrace,"
                 "math_epsilon, iterable_compare_func, use_enum_value, _original_type, threshold_to_diff_deeper, default_timezone "
                 "ignore_order_func, custom_operators, encodings, ignore_encoding_errors, use_log_scale, log_scale_similarity_threshold "
+                "multiprocessing, multiprocessing_workers, multiprocessing_threshold, "
                 "_parameters and _shared_parameters.") % ', '.join(kwargs.keys()))
 
         if _parameters:
@@ -245,8 +264,12 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 ignore_type_subclasses=ignore_type_subclasses,
                 ignore_uuid_types=ignore_uuid_types)
             self.report_repetition = report_repetition
-            self.exclude_paths = add_root_to_paths(convert_item_or_items_into_set_else_none(exclude_paths))
-            self.include_paths = add_root_to_paths(convert_item_or_items_into_set_else_none(include_paths))
+            _exclude_set = convert_item_or_items_into_set_else_none(exclude_paths)
+            _exclude_exact, self.exclude_glob_paths = separate_wildcard_and_exact_paths(_exclude_set)
+            self.exclude_paths = add_root_to_paths(_exclude_exact)
+            _include_set = convert_item_or_items_into_set_else_none(include_paths)
+            _include_exact, self.include_glob_paths = separate_wildcard_and_exact_paths(_include_set)
+            self.include_paths = add_root_to_paths(_include_exact)
             self.exclude_regex_paths = convert_item_or_items_into_compiled_regexes_else_none(exclude_regex_paths)
             self.exclude_types = set(exclude_types) if exclude_types else None
             self.exclude_types_tuple = tuple(exclude_types) if exclude_types else None  # we need tuple for checking isinstance
@@ -302,6 +325,8 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
             # DeepDiff _parameters are transformed to DeepHash _parameters via _get_deephash_params method.
             self.progress_logger = progress_logger
             self.cache_size = cache_size
+            self._mp_config = normalize_mp_config(
+                multiprocessing, multiprocessing_workers, multiprocessing_threshold)
             _parameters = self.__dict__.copy()
             _parameters['group_by'] = None  # overwriting since these parameters will be passed on to other passes.
             if log_stacktrace:
@@ -330,6 +355,13 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 MAX_PASS_LIMIT_REACHED: False,
                 MAX_DIFF_LIMIT_REACHED: False,
                 DISTANCE_CACHE_ENABLED: bool(cache_size),
+                # Multiprocessing aggregates: each parallel batch sums per-worker
+                # _stats deltas into these keys. Parent-side counters above stay
+                # comparable to a serial run so existing tests are unaffected.
+                WORKER_DIFF_COUNT: 0,
+                WORKER_PASSES_COUNT: 0,
+                WORKER_DISTANCE_CACHE_HIT_COUNT: 0,
+                WORKER_BATCH_COUNT: 0,
             }
             self.hashes = dict_() if hashes is None else hashes
             self._numpy_paths = dict_()  # if _numpy_paths is None else _numpy_paths
@@ -402,7 +434,7 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                     self.__dict__.clear()
 
     def _get_deephash_params(self):
-        result = {key: self._parameters[key] for key in DEEPHASH_PARAM_KEYS}
+        result = {key: self._parameters.get(key) for key in DEEPHASH_PARAM_KEYS}
         result['ignore_repetition'] = not self.report_repetition
         result['number_to_string_func'] = self.number_to_string
         return result
@@ -421,6 +453,8 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         """
 
         if not self._skip_this(change_level):
+            if self._skip_report_for_include_glob(change_level):
+                return
             change_level.report_type = report_type
             tree = self.tree if local_tree is None else local_tree
             tree[report_type].add(change_level)
@@ -440,9 +474,32 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         """
 
         if not self._skip_this(level):
+            if self._skip_report_for_include_glob(level):
+                return
             level.report_type = report_type
             level.additional[CUSTOM_FIELD] = extra_info
             self.tree[report_type].add(level)
+
+    def _skip_report_for_include_glob(self, level):
+        """When include_glob_paths is set, _skip_this allows ancestors through for traversal.
+        This method does a stricter check at report time: only report if the path
+        actually matches a glob pattern or is a descendant of a matching path,
+        or if it already matches an exact include_path."""
+        if not self.include_glob_paths:
+            return False
+        level_path = level.path()
+        # If exact include_paths already matched, don't skip
+        if self.include_paths:
+            if level_path in self.include_paths:
+                return False
+            for prefix in self.include_paths:
+                if prefix in level_path:
+                    return False
+        # Check glob patterns: match or descendant
+        for gp in self.include_glob_paths:
+            if gp.match_or_is_descendant(level_path):
+                return False
+        return True
 
     @staticmethod
     def _dict_from_slots(object: Any) -> Dict[str, Any]:
@@ -531,11 +588,21 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         skip = False
         if self.exclude_paths and level_path in self.exclude_paths:
             skip = True
-        if self.include_paths and level_path != 'root':
-            if level_path not in self.include_paths:
-                skip = True
-                for prefix in self.include_paths:
-                    if prefix in level_path or level_path in prefix:
+        elif self.exclude_glob_paths and any(gp.match(level_path) for gp in self.exclude_glob_paths):
+            skip = True
+        if not skip and (self.include_paths or self.include_glob_paths) and level_path != 'root':
+            skip = True
+            if self.include_paths:
+                if level_path in self.include_paths:
+                    skip = False
+                else:
+                    for prefix in self.include_paths:
+                        if prefix in level_path or level_path in prefix:
+                            skip = False
+                            break
+            if skip and self.include_glob_paths:
+                for gp in self.include_glob_paths:
+                    if gp.match_or_is_ancestor(level_path):
                         skip = False
                         break
         elif self.exclude_regex_paths and any(
@@ -565,28 +632,34 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
 
     def _skip_this_key(self, level: Any, key: Any) -> bool:
         # if include_paths is not set, than treet every path as included
-        if self.include_paths is None:
+        if self.include_paths is None and self.include_glob_paths is None:
             return False
-        if "{}['{}']".format(level.path(), key) in self.include_paths:
-            return False
-        if level.path() in self.include_paths:
-            # matches e.g. level+key root['foo']['bar']['veg'] include_paths ["root['foo']['bar']"]
-            return False
-        for prefix in self.include_paths:
-            if "{}['{}']".format(level.path(), key) in prefix:
-                # matches as long the prefix is longer than this object key
-                # eg.: level+key root['foo']['bar'] matches prefix root['foo']['bar'] from include paths
-                #      level+key root['foo'] matches prefix root['foo']['bar'] from include_paths
-                #      level+key root['foo']['bar'] DOES NOT match root['foo'] from include_paths This needs to be handled afterwards
+        key_path = "{}['{}']".format(level.path(), key)
+        if self.include_paths:
+            if key_path in self.include_paths:
                 return False
-        # check if a higher level is included as a whole (=without any sublevels specified)
-        # matches e.g. level+key root['foo']['bar']['veg'] include_paths ["root['foo']"]
-        # but does not match, if it is level+key root['foo']['bar']['veg'] include_paths ["root['foo']['bar']['fruits']"]
-        up = level.up
-        while up is not None:
-            if up.path() in self.include_paths:
+            if level.path() in self.include_paths:
+                # matches e.g. level+key root['foo']['bar']['veg'] include_paths ["root['foo']['bar']"]
                 return False
-            up = up.up
+            for prefix in self.include_paths:
+                if key_path in prefix:
+                    # matches as long the prefix is longer than this object key
+                    # eg.: level+key root['foo']['bar'] matches prefix root['foo']['bar'] from include paths
+                    #      level+key root['foo'] matches prefix root['foo']['bar'] from include_paths
+                    #      level+key root['foo']['bar'] DOES NOT match root['foo'] from include_paths This needs to be handled afterwards
+                    return False
+            # check if a higher level is included as a whole (=without any sublevels specified)
+            # matches e.g. level+key root['foo']['bar']['veg'] include_paths ["root['foo']"]
+            # but does not match, if it is level+key root['foo']['bar']['veg'] include_paths ["root['foo']['bar']['fruits']"]
+            up = level.up
+            while up is not None:
+                if up.path() in self.include_paths:
+                    return False
+                up = up.up
+        if self.include_glob_paths:
+            for gp in self.include_glob_paths:
+                if gp.match_or_is_ancestor(key_path):
+                    return False
         return True
 
     def _get_clean_to_keys_mapping(self, keys: Any, level: Any) -> Dict[Any, Any]:
@@ -638,8 +711,8 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         parents_ids: FrozenSet[int]=frozenset([]),
         print_as_attribute: bool=False,
         override: bool=False,
-        override_t1: Optional[Any]=None,
-        override_t2: Optional[Any]=None,
+        override_t1: Any=None,
+        override_t2: Any=None,
         local_tree: Optional[Any]=None,
     ) -> None:
         """Difference of 2 dictionaries"""
@@ -680,9 +753,13 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         t_keys_removed = t1_keys - t_keys_intersect
 
         if self.threshold_to_diff_deeper:
-            if self.exclude_paths:
+            if self.exclude_paths or self.exclude_glob_paths:
                 t_keys_union = {f"{level.path()}[{repr(key)}]" for key in (t2_keys | t1_keys)}
-                t_keys_union -= self.exclude_paths
+                if self.exclude_paths:
+                    t_keys_union -= self.exclude_paths
+                if self.exclude_glob_paths:
+                    t_keys_union = {k for k in t_keys_union
+                                    if not any(gp.match(k) for gp in self.exclude_glob_paths)}
                 t_keys_union_len = len(t_keys_union)
             else:
                 t_keys_union_len = len(t2_keys | t1_keys)
@@ -788,14 +865,14 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
 
     def _compare_in_order(
         self, level,
-        t1_from_index=None, t1_to_index=None,
-        t2_from_index=None, t2_to_index=None
+        t1_from_index: Optional[int]=None, t1_to_index: Optional[int]=None,
+        t2_from_index: Optional[int]=None, t2_to_index: Optional[int]=None
     ) -> List[Tuple[Tuple[int, int], Tuple[Any, Any]]]:
         """
         Default compare if `iterable_compare_func` is not provided.
         This will compare in sequence order.
         """
-        if t1_from_index is None:
+        if t1_from_index is None or t2_from_index is None:
             return [((i, i), (x, y)) for i, (x, y) in enumerate(
                 zip_longest(
                     level.t1, level.t2, fillvalue=ListItemRemovedOrAdded))]
@@ -1138,14 +1215,75 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         else:
             hashes[item_hash] = IndexedHash(indexes=[i], item=item)
 
+    def _maybe_compute_hashes_parallel(self, level, obj):
+        """Optionally hash iterable items in worker processes.
+
+        Returns a list of per-index ``item_hash`` values (or ``None`` for
+        items the worker could not process), aligned to ``enumerate(obj)``
+        order. Returns ``None`` when the section ran serially (no
+        ``_mp_config``, below threshold, generator without ``__len__``,
+        unsafe inputs).
+
+        Iteration order is captured here once via ``list(obj)`` so the
+        parent loop and the worker job list see the same items even for
+        order-sensitive iterables like sets.
+        """
+        mp_config = getattr(self, '_mp_config', None)
+        if mp_config is None or not mp_config.enabled:
+            return None, None
+        try:
+            n = len(obj)
+        except TypeError:
+            # Generators / unsized iterables: serial fallback. Materializing
+            # would change semantics (single-pass consumption).
+            return None, None
+        if not mp_config.should_parallelize(n):
+            return None, None
+
+        items = list(obj)
+        parent_base = level.path()
+        jobs = [
+            (item, "{}[{}]".format(parent_base, i))
+            for i, item in enumerate(items)
+        ]
+        hashes = compute_hashes_parallel(
+            jobs=jobs,
+            deephash_parameters=self.deephash_parameters,
+            config=mp_config,
+        )
+        if hashes is None:
+            return None, None
+        return hashes, items
+
     def _create_hashtable(self, level, t):
         """Create hashtable of {item_hash: (indexes, item)}"""
         obj = getattr(level, t)
 
+        # Optionally precompute item hashes in worker processes. Workers
+        # operate on serial-order job indices and the parent merges back
+        # in that same order, so output is independent of worker
+        # completion order. ``items`` is the materialized iterable when
+        # parallel ran (set/dict iteration is deterministic per run but we
+        # need a single pass we can re-walk here).
+        parallel_hashes, materialized_items = self._maybe_compute_hashes_parallel(level, obj)
+        iterator = enumerate(materialized_items) if materialized_items is not None else enumerate(obj)
+
         local_hashes = dict_()
-        for (i, item) in enumerate(obj):
+        for (i, item) in iterator:
             try:
                 parent = "{}[{}]".format(level.path(), i)
+                if parallel_hashes is not None:
+                    item_hash = parallel_hashes[i]
+                    if item_hash is None:
+                        # Worker could not process this item (KeyError or
+                        # unprocessed marker). Mirror the serial pass:
+                        # log once, skip.
+                        self.log_err("Item %s was not processed while hashing "
+                                     "thus not counting this object." %
+                                     level.path())
+                        continue
+                    self._add_hash(hashes=local_hashes, item_hash=item_hash, item=item, i=i)
+                    continue
                 # Note: in the DeepDiff we only calculate the hash of items when we have to.
                 # So self.hashes does not include hashes of all objects in t1 and t2.
                 # It only includes the ones needed when comparing iterables.
@@ -1181,6 +1319,9 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                         self._add_hash(hashes=local_hashes, item_hash=item_hash, item=item, i=i)
 
         # Also we hash the iterables themselves too so that we can later create cache keys from those hashes.
+        # When the per-item loop ran in parallel, child hashes were not merged into ``self.hashes``
+        # (cross-process id keys would not match). The iterable-level pass therefore re-hashes
+        # children serially; this is intentional — correctness over cache reuse for now.
         DeepHash(
             obj,
             hashes=self.hashes,
@@ -1210,9 +1351,12 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         _distance = cache_key = None
         if self._stats[DISTANCE_CACHE_ENABLED]:
             cache_key = self._get_distance_cache_key(added_hash, removed_hash)
-            if cache_key in self._distance_cache:
+            cached_distance = self._distance_cache.get(cache_key)
+            if cached_distance is not_found:
+                _distance = None
+            else:
                 self._stats[DISTANCE_CACHE_HIT_COUNT] += 1
-                _distance = self._distance_cache.get(cache_key)
+                _distance = cast(float, cached_distance)
         if _distance is None:
             # We can only cache the rough distance and not the actual diff result for reuse.
             # The reason is that we have modified the parameters explicitly so they are different and can't
@@ -1229,6 +1373,82 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
             if cache_key and self._stats[DISTANCE_CACHE_ENABLED]:
                 self._distance_cache.set(cache_key, value=_distance)
         return _distance
+
+    def _maybe_compute_pair_distances_parallel(
+            self, hashes_added, hashes_removed, t1_hashtable, t2_hashtable,
+            parents_ids, _original_type, pre_calced_distances):
+        """Optionally run distance computation for non-cached pairs in workers.
+
+        Returns a dict ``{(added_hash, removed_hash): distance}`` for pairs
+        whose distance was computed in parallel, or ``None`` if the section
+        ran serially (below threshold, unsafe inputs, no _mp_config, etc.).
+
+        The job list is built in the exact order of the serial nested loop
+        so the parent merge order is identical regardless of how many workers
+        run or which one finishes first.
+        """
+        mp_config = getattr(self, '_mp_config', None)
+        if mp_config is None or not mp_config.enabled:
+            return None
+
+        # Build candidate job list in stable nested-loop order. We skip pairs
+        # that the serial loop also skips (loop detection, pre-calculated
+        # distance, distance cache hit) so workers only get real work.
+        jobs = []
+        cache_enabled = self._stats[DISTANCE_CACHE_ENABLED]
+        for added_hash in hashes_added:
+            for removed_hash in hashes_removed:
+                added_hash_obj = t2_hashtable[added_hash]
+                removed_hash_obj = t1_hashtable[removed_hash]
+                if id(removed_hash_obj.item) in parents_ids:
+                    continue
+                if pre_calced_distances and pre_calced_distances.get(
+                        "{}--{}".format(added_hash, removed_hash)) is not None:
+                    continue
+                if cache_enabled:
+                    cache_key = self._get_distance_cache_key(added_hash, removed_hash)
+                    if self._distance_cache.get(cache_key) is not not_found:
+                        # Serial path will pull this from cache; no worker
+                        # needed and we keep cache-hit accounting in the
+                        # parent.
+                        continue
+                jobs.append((added_hash, removed_hash, added_hash_obj.item, removed_hash_obj.item))
+
+        if not mp_config.should_parallelize(len(jobs)):
+            return None
+
+        result = compute_distances_parallel(
+            jobs=jobs,
+            parameters=self._parameters,
+            original_type=_original_type,
+            iterable_compare_func=self.iterable_compare_func,
+            config=mp_config,
+        )
+        if result is None:
+            return None
+        distances, worker_stats = result
+        self._merge_worker_stats(worker_stats)
+        return distances
+
+    def _merge_worker_stats(self, worker_stats):
+        """Aggregate one parallel-batch's worker ``_stats`` delta into self._stats.
+
+        Counters (DIFF / PASSES / DISTANCE CACHE HIT) sum into the matching
+        ``WORKER_*`` keys; limit flags OR-merge into the parent's existing
+        MAX_*_LIMIT_REACHED flags so any worker hitting a guard surfaces the
+        same warning state on the public ``get_stats()`` output.
+        """
+        if not worker_stats:
+            return
+        self._stats[WORKER_DIFF_COUNT] += int(worker_stats.get('DIFF COUNT', 0) or 0)
+        self._stats[WORKER_PASSES_COUNT] += int(worker_stats.get('PASSES COUNT', 0) or 0)
+        self._stats[WORKER_DISTANCE_CACHE_HIT_COUNT] += int(
+            worker_stats.get('DISTANCE CACHE HIT COUNT', 0) or 0)
+        self._stats[WORKER_BATCH_COUNT] += 1
+        if worker_stats.get(MAX_PASS_LIMIT_REACHED):
+            self._stats[MAX_PASS_LIMIT_REACHED] = True
+        if worker_stats.get(MAX_DIFF_LIMIT_REACHED):
+            self._stats[MAX_DIFF_LIMIT_REACHED] = True
 
     def _get_most_in_common_pairs_in_iterables(
             self, hashes_added, hashes_removed, t1_hashtable, t2_hashtable, parents_ids, _original_type):
@@ -1254,8 +1474,11 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         cache_key = None
         if self._stats[DISTANCE_CACHE_ENABLED]:
             cache_key = combine_hashes_lists(items=[hashes_added, hashes_removed], prefix='pairs_cache')
-            if cache_key in self._distance_cache:
-                return self._distance_cache.get(cache_key).copy()
+            cached_pairs = self._distance_cache.get(cache_key)
+            if cached_pairs is not_found:
+                cached_pairs = None
+            else:
+                return cast(dict, cached_pairs).copy()
 
         # A dictionary of hashes to distances and each distance to an ordered set of hashes.
         # It tells us about the distance of each object from other objects.
@@ -1281,6 +1504,14 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
             pre_calced_distances = self._precalculate_distance_by_custom_compare_func(
                 hashes_added, hashes_removed, t1_hashtable, t2_hashtable, _original_type)
 
+        # Optionally precompute non-cached distances in worker processes.
+        # Returns a dict keyed by (added_hash, removed_hash). Pair selection
+        # below stays serial and walks the same nested loop order, so the
+        # public output is independent of worker completion order.
+        parallel_distances = self._maybe_compute_pair_distances_parallel(
+            hashes_added, hashes_removed, t1_hashtable, t2_hashtable,
+            parents_ids, _original_type, pre_calced_distances)
+
         for added_hash in hashes_added:
             for removed_hash in hashes_removed:
                 added_hash_obj = t2_hashtable[added_hash]
@@ -1293,9 +1524,12 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 _distance = None
                 if pre_calced_distances:
                     _distance = pre_calced_distances.get("{}--{}".format(added_hash, removed_hash))
+                if _distance is None and parallel_distances is not None:
+                    _distance = parallel_distances.get((added_hash, removed_hash))
                 if _distance is None:
                     _distance = self._get_rough_distance_of_hashed_objs(
                         added_hash, removed_hash, added_hash_obj, removed_hash_obj, _original_type)
+                _distance = cast(float, _distance)
                 # Left for future debugging
                 # print(f'{Fore.RED}distance of {added_hash_obj.item} and {removed_hash_obj.item}: {_distance}{Style.RESET_ALL}')
                 # Discard potential pairs that are too far.
@@ -1331,6 +1565,141 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
         if cache_key and self._stats[DISTANCE_CACHE_ENABLED]:
             self._distance_cache.set(cache_key, value=pairs)
         return pairs.copy()
+
+    def _subtree_parallel_safe(self):
+        """Return True if paired-subtree diffs in this run can be sent to workers.
+
+        Excluded features are ones whose semantics depend on the *parent's*
+        absolute path or on parent-process state, neither of which is visible
+        in a worker:
+
+        - ``custom_operators`` (per docs/multi_processing.md) can call
+          ``custom_report_result`` and mutate the parent diff instance.
+        - ``exclude_obj_callback`` / ``include_obj_callback`` (and their
+          ``_strict`` variants) receive the level path; in a worker that path
+          is rooted at the subtree, not the original tree, so they would fire
+          on the wrong paths.
+        - ``ignore_order_func`` is also called with the level and would see
+          worker-local paths.
+
+        Path-only filters (``exclude_paths`` / ``include_paths`` /
+        ``exclude_regex_paths``) are handled by re-applying ``_skip_this``
+        after rebasing rather than disabling parallelism.
+        """
+        if self.custom_operators:
+            return False
+        if self.exclude_obj_callback or self.exclude_obj_callback_strict:
+            return False
+        if self.include_obj_callback or self.include_obj_callback_strict:
+            return False
+        if self.ignore_order_func:
+            return False
+        return True
+
+    def _rebase_subtree_leaf(self, leaf, change_level):
+        """Splice a worker-built leaf chain onto the parent's ``change_level``.
+
+        The worker constructed ``leaf`` inside a fresh ``DeepDiff`` whose root
+        DiffLevel holds the paired items themselves; that root is irrelevant
+        once we're back in the parent. We replace it with a *fresh copy* of
+        ``change_level`` (so each leaf gets its own up-chain — DiffLevel.up
+        is shared by reference, and reusing one chain across leaves would
+        scramble paths).
+
+        Returns the rebased leaf. Path caches along the chain are cleared so
+        ``leaf.path()`` recomputes against the new up-chain.
+        """
+        # Walk up to find the worker root (up=None).
+        worker_root = leaf
+        while worker_root.up is not None:
+            worker_root = worker_root.up
+
+        new_cl = change_level.copy()  # fresh, independent chain; new_cl is bottom
+
+        if worker_root is leaf:
+            # The worker reported at the very root of its diff (e.g. the two
+            # paired items differ at the top level — type_changes,
+            # values_changed). Transfer the report payload onto our fresh
+            # change_level copy.
+            new_cl.report_type = leaf.report_type
+            new_cl.additional = leaf.additional
+            cur = new_cl
+            while cur is not None:
+                cur._path = dict_()
+                cur = cur.up
+            return new_cl
+
+        first_under_root = worker_root.down
+        # Splice: new_cl takes worker_root's place. Setting .down auto-sets
+        # the opposite .up link (see DiffLevel.__setattr__).
+        new_cl.down = first_under_root
+        if worker_root.t1_child_rel is not None:
+            new_cl.t1_child_rel = ChildRelationship.create(
+                klass=worker_root.t1_child_rel.__class__,
+                parent=new_cl.t1, child=first_under_root.t1,
+                param=worker_root.t1_child_rel.param,
+            )
+        if worker_root.t2_child_rel is not None:
+            new_cl.t2_child_rel = ChildRelationship.create(
+                klass=worker_root.t2_child_rel.__class__,
+                parent=new_cl.t2, child=first_under_root.t2,
+                param=worker_root.t2_child_rel.param,
+            )
+        # Clear path cache on the entire chain so path() recomputes against
+        # the new up-chain.
+        cur = leaf
+        while cur is not None:
+            cur._path = dict_()
+            cur = cur.up
+        return leaf
+
+    def _dispatch_subtree_jobs(self, pending_jobs, _original_type, local_tree):
+        """Run deferred paired-subtree diffs (parallel when allowed, else serial).
+
+        ``pending_jobs`` is the list of ``(change_level, t1_item, t2_item,
+        parents_ids_added)`` tuples in the exact order the inline serial code
+        would have visited them. Parallel results are merged in that same
+        order regardless of worker completion order, so output is identical
+        to the equivalent serial run.
+        """
+        if not pending_jobs:
+            return
+
+        mp_config = getattr(self, '_mp_config', None)
+        parallel_results = None
+        if (mp_config is not None and mp_config.enabled
+                and mp_config.should_parallelize(len(pending_jobs))):
+            jobs_payload = [(t1_item, t2_item) for (_, t1_item, t2_item, _) in pending_jobs]
+            outcome = compute_subtree_diffs_parallel(
+                jobs=jobs_payload,
+                parameters=self._parameters,
+                original_type=_original_type,
+                config=mp_config,
+            )
+            if outcome is not None:
+                parallel_results, worker_stats = outcome
+                self._merge_worker_stats(worker_stats)
+
+        if parallel_results is None:
+            # Below threshold or unsafe inputs — run inline-equivalent serial.
+            # Walking pending_jobs in order matches how inline serial would
+            # have run them; the parent tree fills up the same way.
+            for change_level, _t1_item, _t2_item, parents_ids_added in pending_jobs:
+                self._diff(change_level, parents_ids_added, local_tree=local_tree)
+            return
+
+        target_tree = self.tree if local_tree is None else local_tree
+        for (change_level, _t1_item, _t2_item, _parents_ids_added), entries in zip(
+                pending_jobs, parallel_results):
+            for report_type, leaf in entries:
+                rebased_leaf = self._rebase_subtree_leaf(leaf, change_level)
+                # Re-apply path-based filters in the parent — exclude_paths
+                # and friends were not applied correctly inside the worker
+                # because the worker's level paths are subtree-relative.
+                if self._skip_this(rebased_leaf):
+                    continue
+                rebased_leaf.report_type = report_type
+                target_tree[report_type].add(rebased_leaf)
 
     def _diff_iterable_with_deephash(self, level, parents_ids, _original_type=None, local_tree=None):
         """Diff of hashable or unhashable iterables. Only used when ignoring the order."""
@@ -1390,6 +1759,18 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 other = hashtable[other]
             return other
 
+        # Phase 3: paired-subtree diffs may be deferred so they can run in a
+        # worker pool. ``pending_subtree_jobs is None`` keeps the inline
+        # serial path (and the existing ordering of inline ``_diff`` calls
+        # vs. ``_report_result`` calls) — so any feature that disables
+        # subtree parallelism degrades cleanly to today's behavior.
+        mp_config = getattr(self, '_mp_config', None)
+        use_mp = (
+            mp_config is not None and mp_config.enabled
+            and self._subtree_parallel_safe()
+        )
+        pending_subtree_jobs = [] if use_mp else None
+
         if self.report_repetition:
             for hash_value in hashes_added:
                 if self._count_diff() is StopIteration:
@@ -1416,7 +1797,11 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                         self._report_result('iterable_item_added', change_level, local_tree=local_tree)
                     else:
                         parents_ids_added = add_to_frozen_set(parents_ids, item_id)
-                        self._diff(change_level, parents_ids_added, local_tree=local_tree)
+                        if pending_subtree_jobs is None:
+                            self._diff(change_level, parents_ids_added, local_tree=local_tree)
+                        else:
+                            pending_subtree_jobs.append(
+                                (change_level, other.item, t2_hashtable[hash_value].item, parents_ids_added))
             for hash_value in hashes_removed:
                 if self._count_diff() is StopIteration:
                     return  # pragma: no cover. This is already covered for addition.
@@ -1425,7 +1810,7 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                 # When we report repetitions, we want the child_relationship_param2 only if there is no repetition.
                 # Because when there is a repetition, we report it in a different way (iterable_items_added_at_indexes for example).
                 # When there is no repetition, we want child_relationship_param2 so that we report the "new_path" correctly.
-                if other.item is notpresent or len(other.indexes > 1):
+                if other.item is notpresent or len(other.indexes) > 1:
                     index2 = None
                 else:
                     index2 = other.indexes[0]
@@ -1444,7 +1829,11 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                         # getting resolved above in the hashes_added calcs. However I am leaving these 2 lines
                         # in case things change in future.
                         parents_ids_added = add_to_frozen_set(parents_ids, item_id)  # pragma: no cover.
-                        self._diff(change_level, parents_ids_added, local_tree=local_tree)  # pragma: no cover.
+                        if pending_subtree_jobs is None:  # pragma: no cover.
+                            self._diff(change_level, parents_ids_added, local_tree=local_tree)
+                        else:  # pragma: no cover.
+                            pending_subtree_jobs.append(
+                                (change_level, t1_hashtable[hash_value].item, other.item, parents_ids_added))
 
             items_intersect = t2_hashes.intersection(t1_hashes)
 
@@ -1488,7 +1877,11 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                     self._report_result('iterable_item_added', change_level, local_tree=local_tree)
                 else:
                     parents_ids_added = add_to_frozen_set(parents_ids, item_id)
-                    self._diff(change_level, parents_ids_added, local_tree=local_tree)
+                    if pending_subtree_jobs is None:
+                        self._diff(change_level, parents_ids_added, local_tree=local_tree)
+                    else:
+                        pending_subtree_jobs.append(
+                            (change_level, other.item, t2_hashtable[hash_value].item, parents_ids_added))
 
             for hash_value in hashes_removed:
                 if self._count_diff() is StopIteration:
@@ -1510,7 +1903,14 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
                     # Just like the case when report_repetition = True, these lines never run currently.
                     # However they will stay here in case things change in future.
                     parents_ids_added = add_to_frozen_set(parents_ids, item_id)  # pragma: no cover.
-                    self._diff(change_level, parents_ids_added, local_tree=local_tree)  # pragma: no cover.
+                    if pending_subtree_jobs is None:  # pragma: no cover.
+                        self._diff(change_level, parents_ids_added, local_tree=local_tree)
+                    else:  # pragma: no cover.
+                        pending_subtree_jobs.append(
+                            (change_level, t1_hashtable[hash_value].item, other.item, parents_ids_added))
+
+        if pending_subtree_jobs:
+            self._dispatch_subtree_jobs(pending_subtree_jobs, _original_type, local_tree)
 
     def _diff_booleans(self, level, local_tree=None):
         if level.t1 != level.t2:
@@ -1752,7 +2152,7 @@ class DeepDiff(ResultDict, SerializationMixin, DistanceMixin, DeepDiffProtocol, 
             if self.ignore_uuid_types and isinstance(level.t2, uuids):
                 try:
                     # Convert string to UUID for comparison
-                    t1_uuid = uuid.UUID(level.t1)
+                    t1_uuid = uuid.UUID(str(level.t1))
                     if t1_uuid.int != level.t2.int:
                         self._report_result('values_changed', level, local_tree=local_tree)
                 except (ValueError, AttributeError):
