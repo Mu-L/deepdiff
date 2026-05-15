@@ -645,6 +645,32 @@ class TestBasicsOfDelta:
         diff = DeepDiff(a1, a2)
         delta = Delta(diff)
         assert a2 == a1 + delta
+
+    def test_nested_namedtuple_frozenset_add_delta(self):
+        class Article(NamedTuple):
+            tags: frozenset
+
+        t1 = {"article": Article(frozenset(["a"]))}
+        t2 = {"article": Article(frozenset(["a", "b"]))}
+        delta = Delta(DeepDiff(t1, t2))
+
+        assert t2 == t1 + delta
+
+    def test_tuple_iterable_opcodes_with_insert_delete_delta(self):
+        t1 = tuple("A B C D H".split())
+        t2 = tuple("B C D H Y Z".split())
+        delta = Delta(DeepDiff(t1, t2), bidirectional=True)
+
+        assert "_iterable_opcodes" in delta.diff
+        assert t2 == t1 + delta
+
+    def test_complex_dictionary_keys_removed_delta(self):
+        t1 = {1 + 2j: "a", 3 + 4j: "b"}
+        t2 = {}
+        diff = DeepDiff(t1, t2, threshold_to_diff_deeper=0)
+        delta = Delta(diff, raise_errors=True)
+
+        assert t2 == t1 + delta
  
 picklalbe_obj_without_item = PicklableClass(11)
 del picklalbe_obj_without_item.item
@@ -2133,8 +2159,10 @@ class TestDeltaCompareFunc:
         }
         assert expected == ddiff
         delta = Delta(ddiff)
+        flat_rows_before_apply = delta.to_flat_rows()
         recreated_t2 = t1 + delta
         assert t2 == recreated_t2
+        assert flat_rows_before_apply == delta.to_flat_rows()
 
     def test_compare_func_swap(self):
         t1 = [{'id': 1, 'val': 1}, {'id': 1, 'val': 3}]

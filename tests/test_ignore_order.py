@@ -742,6 +742,12 @@ class TestIgnoreOrder:
             'DISTANCE CACHE HIT COUNT': 0,
             'MAX PASS LIMIT REACHED': False,
             'MAX DIFF LIMIT REACHED': False,
+            # Phase 4 (multiprocessing-aware stats) added zeroed worker keys to
+            # every run; serial diffs have nothing to aggregate so they stay 0.
+            'WORKER DIFF COUNT': 0,
+            'WORKER PASSES COUNT': 0,
+            'WORKER DISTANCE CACHE HIT COUNT': 0,
+            'WORKER BATCH COUNT': 0,
         }
         assert expected == diff.get_stats()
 
@@ -819,7 +825,12 @@ class TestIgnoreOrder:
             'DIFF COUNT': 13,
             'DISTANCE CACHE HIT COUNT': 1,
             'MAX PASS LIMIT REACHED': False,
-            'MAX DIFF LIMIT REACHED': False
+            'MAX DIFF LIMIT REACHED': False,
+            # Phase 4: zeroed worker aggregates always present in get_stats().
+            'WORKER DIFF COUNT': 0,
+            'WORKER PASSES COUNT': 0,
+            'WORKER DISTANCE CACHE HIT COUNT': 0,
+            'WORKER BATCH COUNT': 0,
         }
         assert expected_stats == stats
 

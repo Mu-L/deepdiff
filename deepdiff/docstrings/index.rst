@@ -7,6 +7,15 @@
 DeepDiff 9.0.0 documentation!
 =============================
 
+.. |qluster_link| raw:: html
+
+   <a href="/qluster"><strong>Qluster</strong></a>
+
+.. admonition:: DeepDiff is now part of |qluster_link|.
+
+    *If you're building workflows around data validation and correction,* `Qluster </qluster>`__ *gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
+
+
 *******
 Modules
 *******
@@ -43,7 +52,7 @@ DeepDiff 9-0-0
    - Fixed colored view display when all list items are removed thanks to `yannrouillard <https://github.com/yannrouillard>`__
    - Fixed ``hasattr()`` swallowing ``AttributeError`` in ``__slots__`` handling for objects with ``__getattr__`` thanks to `tpvasconcelos <https://github.com/tpvasconcelos>`__
    - Fixed ``ignore_order=True`` missing int-vs-float type changes
-   - Always use t1 path for reporting thanks to `devin13cox <https://github.com/devin13cox>`__
+   - Fixed Delta producing phantom entries when items both move and change values with ``iterable_compare_func`` thanks to `devin13cox <https://github.com/devin13cox>`__
    - Fixed ``_convert_oversized_ints`` failing on NamedTuples
    - Fixed orjson ``TypeError`` for integers exceeding 64-bit range
    - Fixed parameter bug in ``to_flat_dicts`` where ``include_action_in_path`` and ``report_type_changes`` were not being passed through

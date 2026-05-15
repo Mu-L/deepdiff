@@ -5,7 +5,7 @@ Changelog
 
 DeepDiff Changelog
 
-- v8-7-0
+- v9-0-0
    - migration note:
         - `to_dict()` and `to_json()` now accept a `verbose_level` parameter and always return a usable text-view dict. When the original view is `'tree'`, they default to `verbose_level=2` for full detail. The old `view_override` parameter is removed. To get the previous results, you will need to pass the explicit verbose_level to `to_json` and `to_dict` if you are using the tree view.
    - Dropping support for Python 3.9
@@ -15,7 +15,7 @@ DeepDiff Changelog
    - Fixed colored view display when all list items are removed thanks to `yannrouillard <https://github.com/yannrouillard>`__
    - Fixed ``hasattr()`` swallowing ``AttributeError`` in ``__slots__`` handling for objects with ``__getattr__`` thanks to `tpvasconcelos <https://github.com/tpvasconcelos>`__
    - Fixed ``ignore_order=True`` missing int-vs-float type changes
-   - Always use t1 path for reporting thanks to `devin13cox <https://github.com/devin13cox>`__
+   - Fixed Delta producing phantom entries when items both move and change values with ``iterable_compare_func`` thanks to `devin13cox <https://github.com/devin13cox>`__
    - Fixed ``_convert_oversized_ints`` failing on NamedTuples
    - Fixed orjson ``TypeError`` for integers exceeding 64-bit range
    - Fixed parameter bug in ``to_flat_dicts`` where ``include_action_in_path`` and ``report_type_changes`` were not being passed through

@@ -6,9 +6,9 @@
 [![Build Status](https://github.com/seperman/deepdiff/workflows/Unit%20Tests/badge.svg)](https://github.com/seperman/deepdiff/actions)
 [![codecov](https://codecov.io/gh/seperman/deepdiff/branch/master/graph/badge.svg?token=KkHZ3siA3m)](https://codecov.io/gh/seperman/deepdiff)
 
-**DeepDiff is now part of [Qluster](https://getqluster.com).**
+**DeepDiff is now part of [Qluster](/qluster).**
 
-*If you're building workflows around data validation and correction, [Qluster](https://getqluster.com) gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
+*If you're building workflows around data validation and correction, [Qluster](/qluster) gives your team a structured way to manage rules, review failures, approve fixes, and reuse decisions—without building the entire system from scratch.*
 
 ## Modules
 
@@ -37,7 +37,7 @@ DeepDiff 9-0-0
 - Fixed colored view display when all list items are removed thanks to @yannrouillard
 - Fixed `hasattr()` swallowing `AttributeError` in `__slots__` handling for objects with `__getattr__` thanks to @tpvasconcelos
 - Fixed `ignore_order=True` missing int-vs-float type changes
-- Always use t1 path for reporting thanks to @devin13cox
+- Fixed Delta producing phantom entries when items both move and change values with `iterable_compare_func` thanks to @devin13cox
 - Fixed `_convert_oversized_ints` failing on NamedTuples
 - Fixed orjson `TypeError` for integers exceeding 64-bit range
 - Fixed parameter bug in `to_flat_dicts` where `include_action_in_path` and `report_type_changes` were not being passed through
@@ -77,7 +77,7 @@ Please take a look at the [CHANGELOG](CHANGELOG.md) file.
 
 # Survey
 
-:mega: **Please fill out our [fast 5-question survey](https://forms.gle/E6qXexcgjoKnSzjB8)** so that we can learn how & why you use DeepDiff, and what improvements we should make. Thank you! :dancers:
+:mega: **Please fill out our [fast 10-question survey](https://tally.so/r/J98MPY)** so that we can learn how & why you use DeepDiff, and what improvements we should make. Thank you! :dancers:
 
 # Local dev
 

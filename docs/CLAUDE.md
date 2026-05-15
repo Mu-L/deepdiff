@@ -20,6 +20,15 @@ Uses the **Furo** Sphinx theme. Key customizations:
 - **GA4**: Google Analytics tag (`G-KVVHD37BKD`) is injected via `_templates/page.html` in the `extrahead` block
 - **Pygments**: Uses Furo's default syntax highlighting (no explicit `pygments_style` set)
 
+## Symlinked Docstrings
+
+Some RST files in `docs/` (e.g., `diff_doc.rst`, `deephash_doc.rst`, `search_doc.rst`) are symlinks to `deepdiff/docstrings/`. The files need to exist in both places:
+
+- **`deepdiff/docstrings/`** — So they're included in the generated wheel. `flit_core` (our build system) only packages files under the `deepdiff/` directory, and these are loaded at runtime by `get_doc()` in `helper.py` to serve as Python docstrings.
+- **`docs/`** — So Sphinx can find and build them as documentation pages.
+
+These files have a `:orphan:` directive on line 1 (needed by Sphinx to suppress toctree warnings). `get_doc()` strips it at runtime so it doesn't appear in the Python docstrings.
+
 ## File Structure
 
 - `conf.py` — Sphinx configuration

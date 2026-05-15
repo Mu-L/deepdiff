@@ -15,7 +15,8 @@ from deepdiff.helper import (strings, numbers, only_numbers, times, unprocessed,
                              get_id, type_is_subclass_of_type_group, type_in_type_group,
                              number_to_string, datetime_normalize, KEY_TO_VAL_STR,
                              get_truncate_datetime, dict_, add_root_to_paths, PydanticBaseModel,
-                             separate_wildcard_and_exact_paths)
+                             separate_wildcard_and_exact_paths,
+                             SetOrdered)
 
 from deepdiff.base import Base
 
@@ -160,8 +161,8 @@ class DeepHash(Base):
     hashes: Dict[Any, Any]
     exclude_types_tuple: Tuple[type, ...]
     ignore_repetition: bool
-    exclude_paths: Optional[Set[str]]
-    include_paths: Optional[Set[str]]
+    exclude_paths: Optional[SetOrdered]
+    include_paths: Optional[SetOrdered]
     exclude_regex_paths: Optional[List[re.Pattern[str]]]
     hasher: Callable[[Union[str, bytes]], str]
     use_enum_value: bool
